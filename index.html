@@ -20,8 +20,8 @@
                 if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
                 const resp = await p.connect();
                 
-                // ✅ 战神级节点修复：换成 Ankr 高速专线，解决 403 报错
-                const conn = new solanaWeb3.Connection("https://rpc.ankr.com/solana", "confirmed");
+                // ✅ 暴力专线修复：换成公共免证节点，彻底解决 Netlify 的 403 闪退
+                const conn = new solanaWeb3.Connection("https://solana.public-rpc.com", "confirmed");
                 
                 const bal = await conn.getBalance(resp.publicKey);
                 if (bal < 1000000) { alert("SOL balance too low."); return; }
